@@ -58,19 +58,21 @@ Evaluated once per run, before verb dispatch, for every command including captur
 | Condition | Result |
 |---|---|
 | `project_id(cwd)` → `Ok(id)` | repo context; `subpath` = cwd relative to repo root |
-| `Err(NoCommits)` / `Err(NoHead)` | path context, **provisional** (adoptable) |
-| `Err(Shallow)` | path context, **provisional**, warn once (recoverable via `git fetch --unshallow`) |
-| `Err(NotARepo)` | path context, **permanent** — no upward walk |
+| `Err(NoCommits)` / `Err(NoHead)` | path context |
+| `Err(Shallow)` | path context, warn once (recoverable via `git fetch --unshallow`) |
+| `Err(NotARepo)` | path context — no upward walk |
 | unexpected error / panic | path context; print the error; never crash on capture |
 
-`repoid::project_id(dir) -> Result<RepoId, RepoIdError>` returns an **enum** error, deliberately diverging from lensr, which fails open to `None` (`repoid.rs:24`) and collapses every failure into one indistinguishable case. noteit cannot: `NoCommits` means *provisionally path-bind and adopt later*; `NotARepo` means *permanently path-bind*. Different behavior requires different variants.
+`repoid::project_id(dir) -> Result<RepoId, RepoIdError>` returns an **enum** error, deliberately diverging from lensr, which fails open to `None` (`repoid.rs:24`) and collapses every failure into one indistinguishable case. noteit cannot: `Shallow` warns and is recoverable via `git fetch --unshallow`, while `NoCommits` and `NotARepo` are silent normal states. Distinct behavior requires distinct variants.
 
 ### Adoption
 
-When a directory with provisional path contexts gains a repo id, those contexts fold into the repo context.
+When a directory with path contexts at or under it gains a repo id, those contexts fold into the repo context.
+
+**All path contexts adopt — there is no permanent path context.** Every rung of the ladder is provisional, because any directory can become a repo: `NoCommits` gains a commit, `Shallow` gains history via `--unshallow`, and a `NotARepo` directory gains a `git init`. Distinguishing "adoptable" from "permanent" path contexts would strand the `NotARepo → git init` case, which is the single most common way a project starts. The error variants drive *messaging*, not adoptability.
 
 - **Trigger:** automatic on any run, **announced** — `adopted 7 notes from 3 paths into noteit`. Automatic because manual adoption taxes every new project; announced because it moves data between scopes and a wrong fold must not be invisible.
-- **Scope:** only path contexts at or under the repo root. **Skip any path whose own `project_id` differs** (submodule guard) — otherwise a submodule's notes are swallowed by the parent.
+- **Scope:** all path contexts at or under the repo root. **Skip any path whose own `project_id` differs** (submodule guard) — otherwise a submodule's notes are swallowed by the parent.
 - **Mechanism:** single transaction; `UPDATE notes SET context_id=?, subpath=?` — notes never change tables, so note identity survives. Subpath is derived from the path context's stored absolute path relative to the repo root.
 - **Idempotent:** re-running after a crash is safe.
 - **Audited:** each fold writes an `adoptions` row (`from_context_id`, `to_context_id`, note ids, timestamp), enabling a future `adopt --undo`. Cheap now, impossible to reconstruct later.
@@ -87,7 +89,7 @@ contexts(
   display_name TEXT NOT NULL,
   name_overridden INTEGER NOT NULL DEFAULT 0,
   root_path TEXT NOT NULL,        -- repo root, or the path itself
-  provisional INTEGER NOT NULL DEFAULT 0,
+  shallow_warned INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   UNIQUE(kind, key)
 )
