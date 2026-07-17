@@ -75,6 +75,10 @@ const MIGRATIONS: &[&str] = &[
       INSERT INTO notes_fts(rowid, body) VALUES (new.id, new.body);
     END;
     "#,
+    // v2: pin flag so undo-recreated path contexts are never re-adopted
+    r#"
+    ALTER TABLE contexts ADD COLUMN no_adopt INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 pub fn migrate(conn: &mut Connection) -> Result<(), StoreError> {

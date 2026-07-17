@@ -128,7 +128,7 @@ impl Store {
     pub fn path_contexts_under(&self, root: &str) -> Result<Vec<Context>, StoreError> {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM contexts
-             WHERE kind = 'path' AND (key = ?1 OR key LIKE ?2 ESCAPE '\\')"
+             WHERE kind = 'path' AND no_adopt = 0 AND (key = ?1 OR key LIKE ?2 ESCAPE '\\')"
         );
         let root_with_sep = format!("{root}{}", std::path::MAIN_SEPARATOR);
         let prefix = format!(
@@ -251,6 +251,114 @@ impl Store {
         tx.commit().map_err(StoreError::Sqlite)?;
         Ok(moved)
     }
+
+    /// Undo the most recent adoption batch into `to_context_id`: recreate
+    /// (and pin) each folded path context, move its notes back, and delete
+    /// the audit rows. Pinning (`no_adopt = 1`) is what stops the very next
+    /// automatic adoption from silently re-folding it -- see
+    /// `path_contexts_under`'s `no_adopt = 0` filter.
+    pub fn undo_last_adoption(
+        &mut self,
+        to_context_id: i64,
+    ) -> Result<Option<UndoReport>, StoreError> {
+        let tx = self.conn.transaction().map_err(StoreError::Sqlite)?;
+
+        struct Row {
+            id: i64,
+            note_ids: String,
+            from_key: String,
+            from_root_path: String,
+            from_display_name: String,
+            from_name_overridden: i64,
+        }
+
+        let rows: Vec<Row> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT id, note_ids, from_key, from_root_path, from_display_name, from_name_overridden
+                     FROM adoptions
+                     WHERE to_context_id = ?1
+                       AND adopted_at = (SELECT MAX(adopted_at) FROM adoptions WHERE to_context_id = ?1)",
+                )
+                .map_err(StoreError::Sqlite)?;
+            let mapped = stmt
+                .query_map(params![to_context_id], |r| {
+                    Ok(Row {
+                        id: r.get(0)?,
+                        note_ids: r.get(1)?,
+                        from_key: r.get(2)?,
+                        from_root_path: r.get(3)?,
+                        from_display_name: r.get(4)?,
+                        from_name_overridden: r.get(5)?,
+                    })
+                })
+                .map_err(StoreError::Sqlite)?;
+            let mut v = Vec::new();
+            for r in mapped {
+                v.push(r.map_err(StoreError::Sqlite)?);
+            }
+            v
+        };
+
+        if rows.is_empty() {
+            tx.commit().map_err(StoreError::Sqlite)?;
+            return Ok(None);
+        }
+
+        let ts = now();
+        let mut notes_restored = 0usize;
+        let mut paths_restored = 0usize;
+
+        for row in &rows {
+            tx.execute(
+                "INSERT INTO contexts (kind, key, display_name, name_overridden, root_path, shallow_warned, no_adopt, created_at)
+                 VALUES ('path', ?1, ?2, ?3, ?4, 0, 1, ?5)
+                 ON CONFLICT(kind, key) DO UPDATE SET no_adopt = 1",
+                params![row.from_key, row.from_display_name, row.from_name_overridden, row.from_root_path, ts],
+            )
+            .map_err(StoreError::Sqlite)?;
+
+            let restored_ctx_id: i64 = tx
+                .query_row(
+                    "SELECT id FROM contexts WHERE kind = 'path' AND key = ?1",
+                    params![row.from_key],
+                    |r| r.get(0),
+                )
+                .map_err(StoreError::Sqlite)?;
+
+            if !row.note_ids.is_empty() {
+                for id_str in row.note_ids.split(',') {
+                    let note_id: i64 = id_str
+                        .parse()
+                        .map_err(|_| StoreError::Sqlite(rusqlite::Error::InvalidColumnType(
+                            0,
+                            "note_ids".to_string(),
+                            rusqlite::types::Type::Text,
+                        )))?;
+                    let n = tx
+                        .execute(
+                            "UPDATE notes SET context_id = ?1, subpath = '.' WHERE id = ?2",
+                            params![restored_ctx_id, note_id],
+                        )
+                        .map_err(StoreError::Sqlite)?;
+                    notes_restored += n;
+                }
+            }
+
+            tx.execute("DELETE FROM adoptions WHERE id = ?1", params![row.id])
+                .map_err(StoreError::Sqlite)?;
+            paths_restored += 1;
+        }
+
+        tx.commit().map_err(StoreError::Sqlite)?;
+        Ok(Some(UndoReport { notes_restored, paths_restored }))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UndoReport {
+    pub notes_restored: usize,
+    pub paths_restored: usize,
 }
 
 /// Path of `child` relative to `root`, in noteit's subpath form.
