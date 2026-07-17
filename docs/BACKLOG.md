@@ -1,5 +1,5 @@
 # BACKLOG
-<!-- rev:004 -->
+<!-- rev:005 -->
 
 Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
@@ -29,14 +29,10 @@ blocks the current release; each item is tracked so it isn't lost.
   (not only descendants), and the submodule guard's canonicalized-root
   comparison passes since `repo_root(dir) == dir` post-unshallow. Regression
   test: `tests/adoption.rs::shallow_repo_self_adopts_after_unshallow`.
-
-## Double-counted queries on `list` / `search` / `--tag`
-
-Each of `list`, `search`, and `list --tag` runs one unlimited query to get an
-accurate `total` count, then a second, limited query to fetch the rows
-actually rendered — two scans per invocation. Acceptable for v1 given
-expected note-table sizes, but worth collapsing into a single query (e.g.
-`COUNT(*) OVER()`) if databases grow large enough for this to matter.
+- **Single-query `list` / `search` / `--tag`** — done. The count+fetch double
+  query is collapsed to one scan via `COUNT(*) OVER()`: the four read methods
+  return `(rows, total)`, computing `total` in the same limited query.
+  Behavior unchanged (same rows, order, truncation notice).
 
 ## Deferred by design (from the original spec's out-of-scope list)
 

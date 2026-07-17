@@ -59,6 +59,14 @@ so a fresh Claude verifier or direct run is the green gate) → merge to master
 Genuine unresolvable blocker; a NEVER guardrail or unauthorized gated action
 required; scope satisfied (3 items shipped). On stop → wrap-up summary.
 
+## Run status
+
+**Scope COMPLETE (2026-07-17).** All 3 envelope items shipped & pushed:
+Item 1 `noteit delete <id>` (898d112), Item 2 single-query (571c6c4), Item 3
+shallow re-adopt — verified ALREADY-WORKS, regression test only (078a88b).
+111 tests, gates green. A future `/steps:autonomous` re-run starts fresh from
+this charter (no pending scope remains).
+
 ## Decision Log (newest first)
 
 _(forks settled autonomously appended here as work proceeds)_
