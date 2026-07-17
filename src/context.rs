@@ -86,3 +86,56 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
 
     Ok(Resolved { context, subpath: ".".to_string(), warning })
 }
+
+#[derive(Debug)]
+pub struct AdoptionReport {
+    pub notes_moved: usize,
+    pub paths_folded: usize,
+    pub project: String,
+}
+
+/// Fold any path contexts at or under this repo's root into it.
+///
+/// ALL path contexts adopt -- there is no permanent path context. Any
+/// directory can become a repo: NoCommits gains a commit, Shallow gains
+/// history, and a NotARepo dir gains a `git init`. The submodule guard is
+/// the one exclusion.
+pub fn adopt_if_needed(
+    store: &mut Store,
+    resolved: &Resolved,
+) -> Result<Option<AdoptionReport>, ContextError> {
+    if resolved.context.kind != Kind::Repo {
+        return Ok(None);
+    }
+    let root = resolved.context.root_path.clone();
+    let candidates = store.path_contexts_under(&root)?;
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+
+    // Submodule guard: a nested dir that resolves to a DIFFERENT repo id
+    // owns its own notes and must not be swallowed by the parent.
+    let mut adoptable = Vec::new();
+    for c in candidates {
+        let p = std::path::Path::new(&c.root_path);
+        match repoid::project_id(p) {
+            Ok(id) if id.as_str() != resolved.context.key => continue,
+            _ => adoptable.push(c),
+        }
+    }
+    if adoptable.is_empty() {
+        return Ok(None);
+    }
+
+    let paths_folded = adoptable.len();
+    let notes_moved = store.adopt(&adoptable, resolved.context.id, &root)?;
+    if notes_moved == 0 {
+        return Ok(None);
+    }
+
+    Ok(Some(AdoptionReport {
+        notes_moved,
+        paths_folded,
+        project: resolved.context.display_name.clone(),
+    }))
+}

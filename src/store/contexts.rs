@@ -143,4 +143,85 @@ impl Store {
         }
         Ok(out)
     }
+
+    /// Fold path contexts into a repo context in ONE transaction.
+    ///
+    /// Notes never change tables -- only `context_id` and `subpath` -- so a
+    /// note's identity survives adoption. Returns notes moved.
+    pub fn adopt(
+        &mut self,
+        from: &[Context],
+        to_context_id: i64,
+        to_root: &str,
+    ) -> Result<usize, StoreError> {
+        if from.is_empty() {
+            return Ok(0);
+        }
+        let ts = now();
+        let tx = self.conn.transaction().map_err(StoreError::Sqlite)?;
+        let mut moved = 0usize;
+
+        for ctx in from {
+            // Subpath of the old path context relative to the new repo root.
+            let subpath = subpath_of(to_root, &ctx.root_path);
+
+            let ids: Vec<i64> = {
+                let mut stmt = tx
+                    .prepare("SELECT id FROM notes WHERE context_id = ?1")
+                    .map_err(StoreError::Sqlite)?;
+                let rows = stmt
+                    .query_map(params![ctx.id], |r| r.get::<_, i64>(0))
+                    .map_err(StoreError::Sqlite)?;
+                let mut v = Vec::new();
+                for r in rows {
+                    v.push(r.map_err(StoreError::Sqlite)?);
+                }
+                v
+            };
+
+            if ids.is_empty() {
+                // Nothing to move, but the stale path context still goes.
+                tx.execute("DELETE FROM contexts WHERE id = ?1", params![ctx.id])
+                    .map_err(StoreError::Sqlite)?;
+                continue;
+            }
+
+            let n = tx
+                .execute(
+                    "UPDATE notes SET context_id = ?1, subpath = ?2 WHERE context_id = ?3",
+                    params![to_context_id, subpath, ctx.id],
+                )
+                .map_err(StoreError::Sqlite)?;
+            moved += n;
+
+            let id_list = ids
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            tx.execute(
+                "INSERT INTO adoptions (from_context_id, to_context_id, note_ids, adopted_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![ctx.id, to_context_id, id_list, ts],
+            )
+            .map_err(StoreError::Sqlite)?;
+
+            tx.execute("DELETE FROM contexts WHERE id = ?1", params![ctx.id])
+                .map_err(StoreError::Sqlite)?;
+        }
+
+        tx.commit().map_err(StoreError::Sqlite)?;
+        Ok(moved)
+    }
+}
+
+/// Path of `child` relative to `root`, in noteit's subpath form.
+pub fn subpath_of(root: &str, child: &str) -> String {
+    let root_p = std::path::Path::new(root);
+    let child_p = std::path::Path::new(child);
+    match child_p.strip_prefix(root_p) {
+        Ok(p) if p.as_os_str().is_empty() => ".".to_string(),
+        Ok(p) => p.to_string_lossy().replace('\\', "/"),
+        Err(_) => ".".to_string(),
+    }
 }
