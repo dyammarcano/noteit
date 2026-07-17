@@ -1,2 +1,5 @@
 /target
 /.scripts
+
+# Worktrees live inside the checkout; never track their contents.
+/.claude/worktrees/
