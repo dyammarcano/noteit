@@ -181,29 +181,41 @@ fn effective_limit(requested: Option<usize>) -> Option<usize> {
 }
 
 /// Open a note body in $EDITOR (or $VISUAL) via a temp file.
-fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
+pub fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
     let editor = std::env::var("VISUAL")
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| {
             if cfg!(windows) { "notepad".to_string() } else { "vi".to_string() }
         });
-    let dir = std::env::temp_dir();
-    let path = dir.join(format!("noteit-{}.md", std::process::id()));
-    std::fs::write(&path, "")?;
+    // A NamedTempFile is created with an unpredictable name and exclusive
+    // access, unlike the old `noteit-<pid>.md` path -- predictable temp
+    // paths are a symlink/collision hazard on shared systems. Convert to a
+    // TempPath immediately: this closes our handle to the file, which
+    // matters on Windows where an editor process cannot open a file that
+    // this process still holds open.
+    let tmp = tempfile::Builder::new().suffix(".md").tempfile()?.into_temp_path();
+    let path = tmp.to_path_buf();
 
-    let status = match std::process::Command::new(&editor).arg(&path).status() {
-        Ok(s) => s,
-        Err(e) => {
-            let _ = std::fs::remove_file(&path);
-            return Err(e.into());
-        }
-    };
+    let status = std::process::Command::new(&editor).arg(&path).status()?;
+
     if !status.success() {
-        let _ = std::fs::remove_file(&path);
-        return Err(format!("{editor} exited with {status}").into());
+        // Never delete text the user already typed: on a non-zero editor
+        // exit, read back whatever is there and only discard it if it is
+        // genuinely empty. `tmp` is intentionally NOT dropped-and-cleaned
+        // here -- `.keep()` hands over ownership of the path so the file
+        // survives past this function returning an error.
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        if existing.trim().is_empty() {
+            return Err(format!("{editor} exited with {status}").into());
+        }
+        let kept_path = tmp.keep()?;
+        return Err(format!(
+            "{editor} exited with {status}; your note text was preserved at {}",
+            kept_path.display()
+        )
+        .into());
     }
     let body = std::fs::read_to_string(&path)?;
-    let _ = std::fs::remove_file(&path);
     Ok(body.trim().to_string())
 }
 

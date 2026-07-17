@@ -17,6 +17,4 @@ path = "src/main.rs"
 gix = "0.85"
 rusqlite = { version = "0.40", features = ["bundled"] }
 thiserror = "2.0"
-
-[dev-dependencies]
 tempfile = "3.27"
