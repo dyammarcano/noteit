@@ -1,5 +1,6 @@
 mod schema;
 pub mod contexts;
+pub mod notes;
 
 use std::path::{Path, PathBuf};
 
