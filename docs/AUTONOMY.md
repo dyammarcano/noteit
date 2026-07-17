@@ -63,6 +63,20 @@ required; scope satisfied (3 items shipped). On stop → wrap-up summary.
 
 _(forks settled autonomously appended here as work proceeds)_
 
+### Item 2 — single-query list/search/tag — forks settled 2026-07-17
+- **API shape:** collapse the count+fetch double query by changing the four
+  read methods (`list_notes`, `list_all_notes`, `search`, `notes_by_tag`) to
+  return `(rows, total)` — `Result<(Vec<…>, usize), StoreError>` — computing
+  `total` via `COUNT(*) OVER()` as an extra column in the SAME limited query.
+  `total` = the window value from any row (0 when no rows match). Chosen over
+  adding separate `count_*` methods (which would still be two queries).
+  Call sites in `run_core` destructure `(rows, total)` from one call.
+  Observable behavior (rows, total, truncation notice) is unchanged; this is
+  purely a query-count reduction. Store-test churn (destructure the tuple) is
+  accepted.
+
+### Item 1 — `noteit delete <id>` — shipped 898d112 (see forks below)
+
 ### Item 1 — `noteit delete <id>` — forks settled 2026-07-17
 - **Scoping:** delete is **scoped to the current resolved context** (only a
   note whose `context_id` matches the current context can be deleted). Safer
