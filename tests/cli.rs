@@ -6,6 +6,19 @@ fn args(v: &[&str]) -> Vec<String> {
 }
 
 #[test]
+fn adopt_undo_parses() {
+    assert!(matches!(
+        parse(&args(&["adopt", "--undo"])).unwrap(),
+        Invocation::Adopt { undo: true }
+    ));
+}
+
+#[test]
+fn adopt_without_undo_is_an_error() {
+    assert!(parse(&args(&["adopt"])).is_err());
+}
+
+#[test]
 fn bare_invocation_lists() {
     assert!(matches!(parse(&args(&[])).unwrap(), Invocation::List(_)));
 }

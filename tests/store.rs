@@ -1,6 +1,6 @@
 use noteit::store::Store;
 use noteit::store::contexts::Kind;
-use noteit::store::notes::{parse_tags, Status};
+use noteit::store::notes::{parse_tags, sanitize_fts_query, Status};
 
 #[test]
 fn open_applies_all_migrations() {
@@ -9,7 +9,7 @@ fn open_applies_all_migrations() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .expect("user_version");
-    assert_eq!(v, 1, "schema should be at version 1");
+    assert_eq!(v, 2, "schema should be at version 2");
 }
 
 #[test]
@@ -22,7 +22,17 @@ fn migrations_are_idempotent() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 1);
+    assert_eq!(v, 2);
+}
+
+#[test]
+fn v2_adds_no_adopt_column() {
+    let store = Store::open_in_memory().expect("open");
+    let n: i64 = store
+        .conn()
+        .query_row("SELECT no_adopt FROM contexts", [], |r| r.get(0))
+        .unwrap_or(0);
+    assert_eq!(n, 0);
 }
 
 #[test]
@@ -105,6 +115,25 @@ fn path_contexts_under_excludes_adjacent_prefix_siblings() {
     assert!(keys.contains(&"D:\\rust\\noteit\\src"), "descendant not found in {keys:?}");
     assert!(!keys.contains(&"D:\\rust\\noteit-other"), "adjacent-prefix sibling leaked in {keys:?}");
     assert!(!keys.contains(&"D:\\rust\\noteitXother"), "prefix+char sibling leaked in {keys:?}");
+}
+
+#[test]
+fn path_contexts_under_excludes_pinned_contexts() {
+    let store = Store::open_in_memory().unwrap();
+    let a = store
+        .upsert_context(Kind::Path, "D:\\rust\\noteit", "noteit", "D:\\rust\\noteit")
+        .unwrap();
+    store
+        .upsert_context(Kind::Path, "D:\\rust\\noteit\\src", "src", "D:\\rust\\noteit\\src")
+        .unwrap();
+    store
+        .conn()
+        .execute("UPDATE contexts SET no_adopt = 1 WHERE id = ?1", [a.id])
+        .unwrap();
+
+    let found = store.path_contexts_under("D:\\rust\\noteit").unwrap();
+    let keys: Vec<&str> = found.iter().map(|c| c.key.as_str()).collect();
+    assert_eq!(keys, vec!["D:\\rust\\noteit\\src"], "got {keys:?}");
 }
 
 fn seed_ctx(store: &Store) -> i64 {
@@ -218,6 +247,55 @@ fn search_reflects_edits_via_fts_triggers() {
     // FTS index consistent rather than duplicating the entry.
     store.set_status(n.id, Status::Done).unwrap();
     assert_eq!(store.search("findme", None, None).unwrap().len(), 1);
+}
+
+#[test]
+fn search_with_unbalanced_quote_does_not_error() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    store.add_note(ctx, ".", "has a quote mark").unwrap();
+
+    let result = store.search("\"foo", None, None);
+    assert!(result.is_ok(), "unbalanced quote must not error: {result:?}");
+}
+
+#[test]
+fn search_with_bare_boolean_operator_is_literal() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let n = store.add_note(ctx, ".", "salt AND pepper").unwrap();
+
+    let found = store.search("AND", None, None).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].1.id, n.id);
+}
+
+#[test]
+fn search_multiple_words_requires_all_of_them() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let a = store.add_note(ctx, ".", "tokenizer bug here").unwrap();
+    store.add_note(ctx, ".", "tokenizer only").unwrap();
+
+    let found = store.search("tokenizer bug", None, None).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].1.id, a.id);
+}
+
+#[test]
+fn search_empty_query_returns_no_results() {
+    let store = Store::open_in_memory().unwrap();
+    seed_ctx(&store);
+
+    let found = store.search("   ", None, None).unwrap();
+    assert!(found.is_empty());
+}
+
+#[test]
+fn sanitize_fts_query_quotes_tokens_and_handles_edge_cases() {
+    assert_eq!(sanitize_fts_query("foo bar"), "\"foo\" \"bar\"");
+    assert_eq!(sanitize_fts_query("a\"b"), "\"a\"\"b\"");
+    assert_eq!(sanitize_fts_query("   "), "");
 }
 
 #[test]

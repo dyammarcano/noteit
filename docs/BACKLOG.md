@@ -1,27 +1,20 @@
 # BACKLOG
-<!-- rev:001 -->
+<!-- rev:002 -->
 
-Deferred work identified during implementation of `noteit` v1. Nothing here
+Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
 
-## FTS5 query sanitization
+## Shipped
 
-`src/store/notes.rs` passes the raw user query straight into
-`notes_fts MATCH ?1`. A search like `noteit search "foo` (an unbalanced
-quote) or a bare `AND` / `OR` / `NOT` token is valid input from the user's
-point of view but is also FTS5 query-syntax, so it can hit FTS5's own parser
-and surface a raw SQL syntax error instead of a friendly "no results" or an
-escaped literal match. Not a crash, but a real UX gap — quoting/escaping the
-query before it reaches `MATCH` (or catching the parser error and treating it
-as zero results) is the fix.
-
-## `noteit adopt --undo`
-
-The `adoptions` table already captures everything needed to reconstruct an
-undo: the folded context's identity (`from_key`, `from_root_path`,
-`from_display_name`, `from_name_overridden`) plus which note ids moved. The
-audit rows are written on every fold; the undo command itself is not
-implemented yet.
+- **FTS5 query sanitization** — done. `Store::search` now routes the query
+  through `sanitize_fts_query`, which wraps each whitespace token as a quoted
+  FTS5 phrase (doubling embedded `"`) and ANDs them; an empty query short-
+  circuits to zero results before any SQL. `noteit search "foo` and bare
+  `AND`/`OR`/`NOT` are now literal terms, never a SQL error.
+- **`noteit adopt --undo`** — done. Reverses the most recent automatic
+  adoption: recreates the folded path contexts, moves the notes back, and
+  *pins* those contexts (`no_adopt = 1`, via a v2 migration) so automatic
+  adoption never re-folds them on a later run.
 
 ## Double-counted queries on `list` / `search` / `--tag`
 

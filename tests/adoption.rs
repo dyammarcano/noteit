@@ -254,3 +254,75 @@ fn shallow_nested_repo_is_not_adopted() {
         "vendor note must not have been folded into the parent repo context"
     );
 }
+
+#[test]
+fn undo_restores_notes_to_a_path_context() {
+    let mut store = Store::open_in_memory().unwrap();
+    let dir = common::empty_repo();
+    let src = dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let in_src = resolve(&store, &src).unwrap();
+    store.add_note(in_src.context.id, ".", "src idea").unwrap();
+
+    common::commit_file(dir.path(), "a.txt", "a");
+
+    let r = resolve(&store, dir.path()).unwrap();
+    let report = adopt_if_needed(&mut store, &r).unwrap().expect("adoption");
+    assert_eq!(report.notes_moved, 1);
+
+    let undo = store.undo_last_adoption(r.context.id).unwrap().expect("undo");
+    assert_eq!(undo.notes_restored, 1);
+
+    // Repo context no longer holds the note.
+    let repo_notes = store.list_notes(r.context.id, None, true, None).unwrap();
+    assert!(repo_notes.is_empty(), "note must be moved out of the repo context");
+
+    // The note is back in a Kind::Path context with subpath ".".
+    let src_canon = src.canonicalize().unwrap();
+    let restored_ctx = store
+        .find_context(Kind::Path, &src_canon.to_string_lossy())
+        .unwrap()
+        .expect("restored path context must exist");
+    let restored_notes = store.list_notes(restored_ctx.id, None, true, None).unwrap();
+    assert_eq!(restored_notes.len(), 1);
+    assert_eq!(restored_notes[0].subpath, ".");
+
+    // Audit row is gone.
+    let n: i64 = store
+        .conn()
+        .query_row("SELECT count(*) FROM adoptions", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 0, "undone adoption's audit row must be deleted");
+}
+
+#[test]
+fn undo_pins_so_auto_adoption_does_not_re_fold() {
+    let mut store = Store::open_in_memory().unwrap();
+    let dir = common::empty_repo();
+    let src = dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let in_src = resolve(&store, &src).unwrap();
+    store.add_note(in_src.context.id, ".", "src idea").unwrap();
+
+    common::commit_file(dir.path(), "a.txt", "a");
+
+    let r = resolve(&store, dir.path()).unwrap();
+    adopt_if_needed(&mut store, &r).unwrap().expect("adoption");
+    store.undo_last_adoption(r.context.id).unwrap().expect("undo");
+
+    // Resolve the repo again and try to auto-adopt -- must be a no-op
+    // because the recreated path context is pinned.
+    let r2 = resolve(&store, dir.path()).unwrap();
+    let report = adopt_if_needed(&mut store, &r2).unwrap();
+    assert!(report.is_none(), "pinned path context must not be re-adopted, got {report:?}");
+}
+
+#[test]
+fn undo_with_nothing_to_undo_returns_none() {
+    let mut store = Store::open_in_memory().unwrap();
+    let dir = common::repo_with_commits(1);
+    let r = resolve(&store, dir.path()).unwrap();
+    assert!(store.undo_last_adoption(r.context.id).unwrap().is_none());
+}

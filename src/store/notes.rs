@@ -60,6 +60,22 @@ pub fn parse_tags(body: &str) -> Vec<String> {
     out
 }
 
+/// Sanitize a raw user search string into a safe FTS5 MATCH expression.
+///
+/// FTS5 has its own query grammar (AND/OR/NOT, `*`, `:`, `(`, unbalanced
+/// quotes, ...) which surfaces a confusing SQLITE_ERROR when a note-search
+/// user types something like `"foo` or `AND`. To keep search "just find my
+/// words" we quote every whitespace-separated token as an FTS5 string
+/// literal (doubling embedded `"`), which FTS5 treats as a literal phrase.
+/// Space-separated phrases are implicitly ANDed, so multi-word queries
+/// require all words to match.
+pub fn sanitize_fts_query(raw: &str) -> String {
+    raw.split_whitespace()
+        .map(|tok| format!("\"{}\"", tok.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 const NOTE_COLS: &str = "n.id, n.context_id, n.subpath, n.body, n.status, n.created_at, n.updated_at";
 
 fn row_to_note(row: &Row<'_>, offset: usize) -> rusqlite::Result<Note> {
@@ -191,6 +207,11 @@ impl Store {
         context_id: Option<i64>,
         limit: Option<usize>,
     ) -> Result<Vec<(Context, Note)>, StoreError> {
+        let match_query = sanitize_fts_query(query);
+        if match_query.is_empty() {
+            return Ok(vec![]);
+        }
+
         let mut sql = format!(
             "SELECT {CTX_COLS}, {NOTE_COLS} FROM notes_fts f
              JOIN notes n    ON n.id = f.rowid
@@ -207,8 +228,8 @@ impl Store {
         let mut stmt = conn.prepare(&sql).map_err(StoreError::Sqlite)?;
         let map = |r: &Row<'_>| Ok((row_to_context(r, 0)?, row_to_note(r, 7)?));
         let rows = match context_id {
-            Some(id) => stmt.query_map(params![query, id], map),
-            None => stmt.query_map(params![query], map),
+            Some(id) => stmt.query_map(params![match_query, id], map),
+            None => stmt.query_map(params![match_query], map),
         }
         .map_err(StoreError::Sqlite)?;
 

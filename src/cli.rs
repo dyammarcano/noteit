@@ -4,7 +4,8 @@ use crate::store::notes::Status;
 /// dispatches that verb; ANYTHING else is note text. The set is small and
 /// known at parse time, which is what makes the rule unambiguous despite
 /// looking magical. `add` is the escape hatch for colliding text.
-pub const VERBS: &[&str] = &["add", "list", "search", "new", "done", "open", "project"];
+pub const VERBS: &[&str] =
+    &["add", "list", "search", "new", "done", "open", "project", "adopt"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
@@ -22,6 +23,8 @@ pub enum CliError {
     TagNeedsValue,
     #[error("unknown flag: {0}")]
     UnknownFlag(String),
+    #[error("usage: noteit adopt --undo  (adoption is automatic; --undo reverses the most recent one)")]
+    AdoptNeedsUndo,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -43,6 +46,7 @@ pub enum Invocation {
     Rename(String),
     Help,
     Version,
+    Adopt { undo: bool },
 }
 
 pub const HELP_TEXT: &str = "\
@@ -149,6 +153,13 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             }
             Ok(Invocation::Rename(rest[1..].join(" ")))
         }
+        "adopt" => {
+            if rest.iter().any(|a| a == "--undo") {
+                Ok(Invocation::Adopt { undo: true })
+            } else {
+                Err(CliError::AdoptNeedsUndo)
+            }
+        }
         _ => unreachable!("VERBS and match arms must stay in sync"),
     }
 }
@@ -231,12 +242,16 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     }
 
     // Adoption is automatic but ANNOUNCED -- it moves data between scopes,
-    // so a wrong fold must never be invisible.
-    if let Some(r) = adopt_if_needed(&mut store, &resolved)? {
-        eprintln!(
-            "adopted {} notes from {} paths into {}",
-            r.notes_moved, r.paths_folded, r.project
-        );
+    // so a wrong fold must never be invisible. Skipped for `adopt --undo`:
+    // running auto-adopt right before undoing it would be pointless work
+    // and semantically confusing (adopt-then-undo in one invocation).
+    if !matches!(inv, Invocation::Adopt { undo: true }) {
+        if let Some(r) = adopt_if_needed(&mut store, &resolved)? {
+            eprintln!(
+                "adopted {} notes from {} paths into {}",
+                r.notes_moved, r.paths_folded, r.project
+            );
+        }
     }
     // No re-resolve needed: adopt_if_needed only folds OTHER path-contexts'
     // notes INTO this resolved context -- it never changes `resolved`'s own
@@ -348,6 +363,34 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
         Invocation::Rename(name) => {
             store.rename_context(ctx.id, &name)?;
             writeln!(out, "renamed to {name}")?;
+        }
+        Invocation::Adopt { undo: true } => {
+            match store.undo_last_adoption(ctx.id)? {
+                Some(report) => {
+                    if report.notes_restored > 0 {
+                        writeln!(
+                            out,
+                            "un-adopted {} notes to {} paths — now path-bound, view with: noteit list --global",
+                            report.notes_restored, report.paths_restored
+                        )?;
+                    } else {
+                        writeln!(
+                            out,
+                            "un-adopted {} notes to {} paths",
+                            report.notes_restored, report.paths_restored
+                        )?;
+                    }
+                }
+                None => {
+                    writeln!(out, "nothing to undo")?;
+                }
+            }
+        }
+        // Unreachable: parse() rejects bare `adopt` (no --undo) via
+        // CliError::AdoptNeedsUndo before an Invocation is ever produced.
+        Invocation::Adopt { undo: false } => {
+            eprintln!("{}", CliError::AdoptNeedsUndo);
+            return Ok(2);
         }
         Invocation::Help | Invocation::Version => unreachable!("handled above"),
     }
