@@ -43,10 +43,7 @@ fn status_mark(s: Status) -> &'static str {
 fn truncation_notice(shown: usize, total: usize, limit: Option<usize>) -> Option<String> {
     let _limit = limit?;
     if total > shown {
-        Some(format!(
-            "\n… {} more (--limit 0 for all)",
-            total - shown
-        ))
+        Some(format!("\n… {} more (--limit 0 for all)", total - shown))
     } else {
         None
     }

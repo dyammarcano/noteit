@@ -55,7 +55,9 @@ fn editor_nonzero_exit_preserves_typed_text() {
     // Extract the preserved path from the error message and verify the
     // typed text is still there -- the core "never lose a note" guarantee.
     let marker = "preserved at ";
-    let idx = msg.find(marker).unwrap_or_else(|| panic!("error message did not mention a preserved path: {msg}"));
+    let idx = msg
+        .find(marker)
+        .unwrap_or_else(|| panic!("error message did not mention a preserved path: {msg}"));
     let path_str = msg[idx + marker.len()..].trim();
     let preserved_path = std::path::Path::new(path_str);
     assert!(
@@ -113,7 +115,9 @@ fn editor_invalid_utf8_surfaces_the_path() {
         .find(marker)
         .unwrap_or_else(|| panic!("error message did not mention the temp path: {msg}"));
     let rest = &msg[idx + marker.len()..];
-    let end = rest.find(" (invalid UTF-8)").unwrap_or_else(|| panic!("error message missing marker: {msg}"));
+    let end = rest
+        .find(" (invalid UTF-8)")
+        .unwrap_or_else(|| panic!("error message missing marker: {msg}"));
     let path_str = &rest[..end];
     let preserved_path = std::path::Path::new(path_str);
     assert!(

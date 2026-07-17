@@ -62,14 +62,15 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
             let root = repoid::repo_root(&cwd).unwrap_or_else(|_| cwd.clone());
             let root = root.canonicalize().unwrap_or(root);
             let name = display_name_for(&root);
-            let context = store.upsert_context(
-                Kind::Repo,
-                id.as_str(),
-                &name,
-                &root.to_string_lossy(),
-            )?;
+            let context =
+                store.upsert_context(Kind::Repo, id.as_str(), &name, &root.to_string_lossy())?;
             let subpath = rel_subpath(&root, &cwd);
-            return Ok(Resolved { context, subpath, live_root: root, warning });
+            return Ok(Resolved {
+                context,
+                subpath,
+                live_root: root,
+                warning,
+            });
         }
         Err(RepoIdError::Shallow) => {
             shallow = true;
@@ -92,7 +93,12 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
         );
     }
 
-    Ok(Resolved { context, subpath: ".".to_string(), live_root: cwd, warning })
+    Ok(Resolved {
+        context,
+        subpath: ".".to_string(),
+        live_root: cwd,
+        warning,
+    })
 }
 
 #[derive(Debug)]
@@ -127,8 +133,9 @@ pub fn adopt_if_needed(
     // `project_id` fails for shallow clones and zero-commit repos -- both
     // are still separate repositories that must not lose their notes.
     let adopting_root = std::path::Path::new(&root);
-    let adopting_root_canon =
-        adopting_root.canonicalize().unwrap_or_else(|_| adopting_root.to_path_buf());
+    let adopting_root_canon = adopting_root
+        .canonicalize()
+        .unwrap_or_else(|_| adopting_root.to_path_buf());
     let mut adoptable = Vec::new();
     for c in candidates {
         let p = std::path::Path::new(&c.root_path);

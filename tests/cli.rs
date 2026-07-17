@@ -1,4 +1,4 @@
-use noteit::cli::{parse, Invocation, VERBS};
+use noteit::cli::{Invocation, VERBS, parse};
 use noteit::store::notes::Status;
 
 fn args(v: &[&str]) -> Vec<String> {
@@ -91,7 +91,11 @@ fn every_verb_in_verbs_has_a_match_arm() {
 
 #[test]
 fn list_flags_parse() {
-    match parse(&args(&["list", "--global", "--flat", "--all", "--limit", "10"])).unwrap() {
+    match parse(&args(&[
+        "list", "--global", "--flat", "--all", "--limit", "10",
+    ]))
+    .unwrap()
+    {
         Invocation::List(a) => {
             assert!(a.global && a.flat && a.all);
             assert_eq!(a.limit, Some(10));
@@ -134,12 +138,21 @@ fn help_flag_is_not_captured_as_a_note() {
     // ambiguity rule an unknown first argument is note text. Without this
     // explicit check, `noteit --help` would save a note whose body is
     // literally "--help".
-    assert!(matches!(parse(&args(&["--help"])).unwrap(), Invocation::Help));
+    assert!(matches!(
+        parse(&args(&["--help"])).unwrap(),
+        Invocation::Help
+    ));
     assert!(matches!(parse(&args(&["-h"])).unwrap(), Invocation::Help));
 }
 
 #[test]
 fn version_flag_is_not_captured_as_a_note() {
-    assert!(matches!(parse(&args(&["--version"])).unwrap(), Invocation::Version));
-    assert!(matches!(parse(&args(&["-V"])).unwrap(), Invocation::Version));
+    assert!(matches!(
+        parse(&args(&["--version"])).unwrap(),
+        Invocation::Version
+    ));
+    assert!(matches!(
+        parse(&args(&["-V"])).unwrap(),
+        Invocation::Version
+    ));
 }

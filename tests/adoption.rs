@@ -1,8 +1,8 @@
 mod common;
 
 use noteit::context::{adopt_if_needed, resolve};
-use noteit::store::contexts::Kind;
 use noteit::store::Store;
+use noteit::store::contexts::Kind;
 
 #[test]
 fn path_notes_fold_into_the_repo_context_preserving_subpaths() {
@@ -13,7 +13,9 @@ fn path_notes_fold_into_the_repo_context_preserving_subpaths() {
 
     // Capture at the root and in src BEFORE the first commit.
     let at_root = resolve(&store, dir.path()).unwrap();
-    store.add_note(at_root.context.id, ".", "root idea").unwrap();
+    store
+        .add_note(at_root.context.id, ".", "root idea")
+        .unwrap();
     let in_src = resolve(&store, &src).unwrap();
     store.add_note(in_src.context.id, ".", "src idea").unwrap();
     assert_ne!(at_root.context.id, in_src.context.id, "two path contexts");
@@ -50,7 +52,13 @@ fn adoption_is_idempotent() {
     // A second run must find nothing to do, not re-move or duplicate.
     let second = adopt_if_needed(&mut store, &r).unwrap();
     assert!(second.is_none(), "got {second:?}");
-    assert_eq!(store.list_notes(r.context.id, None, true, None).unwrap().len(), 1);
+    assert_eq!(
+        store
+            .list_notes(r.context.id, None, true, None)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -94,8 +102,14 @@ fn adoption_audit_row_captures_the_folded_context_identity() {
         )
         .unwrap();
     assert_eq!(row_key, from_key, "undo needs the original context key");
-    assert_eq!(row_root, from_root_path, "undo needs the original root path");
-    assert_eq!(row_name, from_display_name, "undo needs the original display name");
+    assert_eq!(
+        row_root, from_root_path,
+        "undo needs the original root path"
+    );
+    assert_eq!(
+        row_name, from_display_name,
+        "undo needs the original display name"
+    );
 }
 
 #[test]
@@ -139,7 +153,10 @@ fn adoption_uses_the_live_root_not_a_stale_stored_one() {
     // Clone X to location A and resolve there -- this seeds the repo
     // context's root_path = A.
     let a_dir = tempfile::tempdir().unwrap();
-    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    let url = format!(
+        "file:///{}",
+        origin.path().to_str().unwrap().replace('\\', "/")
+    );
     common::git(a_dir.path(), &["clone", "-q", &url, "."]);
     let mut store = Store::open_in_memory().unwrap();
     let resolved_a = resolve(&store, a_dir.path()).unwrap();
@@ -152,7 +169,9 @@ fn adoption_uses_the_live_root_not_a_stale_stored_one() {
     let b_dir = tempfile::tempdir().unwrap();
     let resolved_b_before = resolve(&store, b_dir.path()).unwrap();
     assert_eq!(resolved_b_before.context.kind, Kind::Path);
-    store.add_note(resolved_b_before.context.id, ".", "note in B").unwrap();
+    store
+        .add_note(resolved_b_before.context.id, ".", "note in B")
+        .unwrap();
 
     // Now turn B into a clone of the SAME repo X -- same root commit, so
     // resolving B will match the SAME urn already seeded (with root_path=A).
@@ -201,10 +220,20 @@ fn shallow_nested_repo_is_not_adopted() {
     let parent = common::repo_with_commits(1);
 
     let vendor_path = parent.path().join("vendor");
-    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    let url = format!(
+        "file:///{}",
+        origin.path().to_str().unwrap().replace('\\', "/")
+    );
     common::git(
         parent.path(),
-        &["clone", "-q", "--depth", "1", &url, vendor_path.to_str().unwrap()],
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            &url,
+            vendor_path.to_str().unwrap(),
+        ],
     );
 
     // Prove the fixture is genuinely shallow before relying on it.
@@ -224,19 +253,25 @@ fn shallow_nested_repo_is_not_adopted() {
     // context because project_id fails.
     let vendor_resolved = resolve(&store, &vendor_path).unwrap();
     assert_eq!(vendor_resolved.context.kind, Kind::Path);
-    store.add_note(vendor_resolved.context.id, ".", "vendor idea").unwrap();
+    store
+        .add_note(vendor_resolved.context.id, ".", "vendor idea")
+        .unwrap();
 
     // resolve() canonicalizes, so look the context back up by the
     // canonicalized path, matching the stored key.
-    let vendor_canon =
-        vendor_path.canonicalize().unwrap_or_else(|_| vendor_path.clone());
+    let vendor_canon = vendor_path
+        .canonicalize()
+        .unwrap_or_else(|_| vendor_path.clone());
     let vendor_key = vendor_canon.to_string_lossy().to_string();
 
     // Resolve and adopt from the PARENT repo.
     let parent_resolved = resolve(&store, parent.path()).unwrap();
     assert_eq!(parent_resolved.context.kind, Kind::Repo);
     let report = adopt_if_needed(&mut store, &parent_resolved).unwrap();
-    assert!(report.is_none(), "vendor note must not be adopted, got {report:?}");
+    assert!(
+        report.is_none(),
+        "vendor note must not be adopted, got {report:?}"
+    );
 
     // The vendor path context must still exist and still hold the note.
     let vendor_ctx = store
@@ -244,11 +279,16 @@ fn shallow_nested_repo_is_not_adopted() {
         .unwrap()
         .expect("vendor path context must still exist");
     let vendor_notes = store.list_notes(vendor_ctx.id, None, true, None).unwrap();
-    assert_eq!(vendor_notes.len(), 1, "vendor note must remain in its own path context");
+    assert_eq!(
+        vendor_notes.len(),
+        1,
+        "vendor note must remain in its own path context"
+    );
 
     // The parent repo context must NOT contain the vendor note.
-    let parent_notes =
-        store.list_notes(parent_resolved.context.id, None, true, None).unwrap();
+    let parent_notes = store
+        .list_notes(parent_resolved.context.id, None, true, None)
+        .unwrap();
     assert!(
         parent_notes.iter().all(|n| n.subpath != "vendor"),
         "vendor note must not have been folded into the parent repo context"
@@ -271,12 +311,18 @@ fn undo_restores_notes_to_a_path_context() {
     let report = adopt_if_needed(&mut store, &r).unwrap().expect("adoption");
     assert_eq!(report.notes_moved, 1);
 
-    let undo = store.undo_last_adoption(r.context.id).unwrap().expect("undo");
+    let undo = store
+        .undo_last_adoption(r.context.id)
+        .unwrap()
+        .expect("undo");
     assert_eq!(undo.notes_restored, 1);
 
     // Repo context no longer holds the note.
     let repo_notes = store.list_notes(r.context.id, None, true, None).unwrap();
-    assert!(repo_notes.is_empty(), "note must be moved out of the repo context");
+    assert!(
+        repo_notes.is_empty(),
+        "note must be moved out of the repo context"
+    );
 
     // The note is back in a Kind::Path context with subpath ".".
     let src_canon = src.canonicalize().unwrap();
@@ -310,13 +356,19 @@ fn undo_pins_so_auto_adoption_does_not_re_fold() {
 
     let r = resolve(&store, dir.path()).unwrap();
     adopt_if_needed(&mut store, &r).unwrap().expect("adoption");
-    store.undo_last_adoption(r.context.id).unwrap().expect("undo");
+    store
+        .undo_last_adoption(r.context.id)
+        .unwrap()
+        .expect("undo");
 
     // Resolve the repo again and try to auto-adopt -- must be a no-op
     // because the recreated path context is pinned.
     let r2 = resolve(&store, dir.path()).unwrap();
     let report = adopt_if_needed(&mut store, &r2).unwrap();
-    assert!(report.is_none(), "pinned path context must not be re-adopted, got {report:?}");
+    assert!(
+        report.is_none(),
+        "pinned path context must not be re-adopted, got {report:?}"
+    );
 }
 
 #[test]

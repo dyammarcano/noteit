@@ -1,8 +1,8 @@
 mod common;
 
 use noteit::context::resolve;
-use noteit::store::contexts::Kind;
 use noteit::store::Store;
+use noteit::store::contexts::Kind;
 
 #[test]
 fn repo_with_commits_resolves_to_a_repo_context() {
@@ -55,10 +55,20 @@ fn shallow_clone_warns_only_once() {
     let clone_path = dest.path().join("shallow");
 
     // file:// forces a real transport, which `--depth` requires.
-    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    let url = format!(
+        "file:///{}",
+        origin.path().to_str().unwrap().replace('\\', "/")
+    );
     common::git(
         dest.path(),
-        &["clone", "-q", "--depth", "1", &url, clone_path.to_str().unwrap()],
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            &url,
+            clone_path.to_str().unwrap(),
+        ],
     );
 
     let first = resolve(&store, &clone_path).unwrap();
@@ -72,7 +82,12 @@ fn shallow_clone_warns_only_once() {
 fn display_name_defaults_to_the_directory_basename() {
     let store = Store::open_in_memory().unwrap();
     let dir = common::plain_dir();
-    let expected = dir.path().file_name().unwrap().to_string_lossy().to_string();
+    let expected = dir
+        .path()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     let r = resolve(&store, dir.path()).unwrap();
     assert_eq!(r.context.display_name, expected);
 }

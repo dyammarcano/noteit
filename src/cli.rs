@@ -4,8 +4,9 @@ use crate::store::notes::Status;
 /// dispatches that verb; ANYTHING else is note text. The set is small and
 /// known at parse time, which is what makes the rule unambiguous despite
 /// looking magical. `add` is the escape hatch for colliding text.
-pub const VERBS: &[&str] =
-    &["add", "list", "search", "new", "done", "open", "project", "adopt"];
+pub const VERBS: &[&str] = &[
+    "add", "list", "search", "new", "done", "open", "project", "adopt",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
@@ -23,7 +24,9 @@ pub enum CliError {
     TagNeedsValue,
     #[error("unknown flag: {0}")]
     UnknownFlag(String),
-    #[error("usage: noteit adopt --undo  (adoption is automatic; --undo reverses the most recent one)")]
+    #[error(
+        "usage: noteit adopt --undo  (adoption is automatic; --undo reverses the most recent one)"
+    )]
     AdoptNeedsUndo,
 }
 
@@ -138,14 +141,28 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             if query.is_empty() {
                 return Err(CliError::SearchNeedsQuery);
             }
-            Ok(Invocation::Search { query: query.join(" "), global })
+            Ok(Invocation::Search {
+                query: query.join(" "),
+                global,
+            })
         }
         "done" | "open" => {
-            let id = rest.first().ok_or(CliError::StatusNeedsId(
-                if first == "done" { "done" } else { "open" },
-            ))?;
-            let status = if first == "done" { Status::Done } else { Status::Open };
-            Ok(Invocation::SetStatus { id: id.clone(), status })
+            let id = rest
+                .first()
+                .ok_or(CliError::StatusNeedsId(if first == "done" {
+                    "done"
+                } else {
+                    "open"
+                }))?;
+            let status = if first == "done" {
+                Status::Done
+            } else {
+                Status::Open
+            };
+            Ok(Invocation::SetStatus {
+                id: id.clone(),
+                status,
+            })
         }
         "project" => {
             if rest.first().map(String::as_str) != Some("rename") || rest.len() < 2 {
@@ -168,13 +185,13 @@ use std::io::Write;
 
 use crate::context::{adopt_if_needed, resolve};
 use crate::render;
-use crate::store::{default_db_path, Store};
+use crate::store::{Store, default_db_path};
 
 const DEFAULT_LIMIT: usize = 50;
 
 fn effective_limit(requested: Option<usize>) -> Option<usize> {
     match requested {
-        Some(0) => None,        // --limit 0 means everything
+        Some(0) => None, // --limit 0 means everything
         Some(n) => Some(n),
         None => Some(DEFAULT_LIMIT),
     }
@@ -185,7 +202,11 @@ pub fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
     let editor = std::env::var("VISUAL")
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| {
-            if cfg!(windows) { "notepad".to_string() } else { "vi".to_string() }
+            if cfg!(windows) {
+                "notepad".to_string()
+            } else {
+                "vi".to_string()
+            }
         });
     // A NamedTempFile is created with an unpredictable name and exclusive
     // access, unlike the old `noteit-<pid>.md` path -- predictable temp
@@ -193,7 +214,10 @@ pub fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
     // TempPath immediately: this closes our handle to the file, which
     // matters on Windows where an editor process cannot open a file that
     // this process still holds open.
-    let tmp = tempfile::Builder::new().suffix(".md").tempfile()?.into_temp_path();
+    let tmp = tempfile::Builder::new()
+        .suffix(".md")
+        .tempfile()?
+        .into_temp_path();
     let path = tmp.to_path_buf();
 
     let status = std::process::Command::new(&editor).arg(&path).status()?;
@@ -294,7 +318,12 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 return Ok(2);
             }
             let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
-            writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
+            writeln!(
+                out,
+                "saved {} to {}",
+                render::short_id(n.id),
+                ctx.display_name
+            )?;
         }
         Invocation::New => {
             let body = edit_in_editor()?;
@@ -308,7 +337,12 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 return Ok(2);
             }
             let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
-            writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
+            writeln!(
+                out,
+                "saved {} to {}",
+                render::short_id(n.id),
+                ctx.display_name
+            )?;
         }
         Invocation::List(a) => {
             let limit = effective_limit(a.limit);
@@ -400,28 +434,26 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
             store.rename_context(ctx.id, &name)?;
             writeln!(out, "renamed to {name}")?;
         }
-        Invocation::Adopt { undo: true } => {
-            match store.undo_last_adoption(ctx.id)? {
-                Some(report) => {
-                    if report.notes_restored > 0 {
-                        writeln!(
-                            out,
-                            "un-adopted {} notes to {} paths — now path-bound, view with: noteit list --global",
-                            report.notes_restored, report.paths_restored
-                        )?;
-                    } else {
-                        writeln!(
-                            out,
-                            "un-adopted {} notes to {} paths",
-                            report.notes_restored, report.paths_restored
-                        )?;
-                    }
-                }
-                None => {
-                    writeln!(out, "nothing to undo")?;
+        Invocation::Adopt { undo: true } => match store.undo_last_adoption(ctx.id)? {
+            Some(report) => {
+                if report.notes_restored > 0 {
+                    writeln!(
+                        out,
+                        "un-adopted {} notes to {} paths — now path-bound, view with: noteit list --global",
+                        report.notes_restored, report.paths_restored
+                    )?;
+                } else {
+                    writeln!(
+                        out,
+                        "un-adopted {} notes to {} paths",
+                        report.notes_restored, report.paths_restored
+                    )?;
                 }
             }
-        }
+            None => {
+                writeln!(out, "nothing to undo")?;
+            }
+        },
         // Unreachable: parse() rejects bare `adopt` (no --undo) via
         // CliError::AdoptNeedsUndo before an Invocation is ever produced.
         Invocation::Adopt { undo: false } => {
