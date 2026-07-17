@@ -180,8 +180,15 @@ fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
     let path = dir.join(format!("noteit-{}.md", std::process::id()));
     std::fs::write(&path, "")?;
 
-    let status = std::process::Command::new(&editor).arg(&path).status()?;
+    let status = match std::process::Command::new(&editor).arg(&path).status() {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = std::fs::remove_file(&path);
+            return Err(e.into());
+        }
+    };
     if !status.success() {
+        let _ = std::fs::remove_file(&path);
         return Err(format!("{editor} exited with {status}").into());
     }
     let body = std::fs::read_to_string(&path)?;
@@ -231,8 +238,11 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
             r.notes_moved, r.paths_folded, r.project
         );
     }
-    // Re-resolve: adoption may have replaced the context.
-    let resolved = resolve(&store, &cwd)?;
+    // No re-resolve needed: adopt_if_needed only folds OTHER path-contexts'
+    // notes INTO this resolved context -- it never changes `resolved`'s own
+    // id, root_path, or display_name. Re-resolving here would just cost an
+    // extra project_id() git lookup and upsert_context round-trip on every
+    // invocation for no behavioral difference.
     let ctx = &resolved.context;
 
     let mut out = std::io::stdout().lock();
@@ -247,9 +257,14 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
         }
         Invocation::New => {
             let body = edit_in_editor()?;
+            // "Nothing was saved" is not success: a caller must be able to
+            // detect it consistently regardless of which path (Capture or
+            // New) produced it, so this matches Capture's Ok(2) and message
+            // -- the same convention `git commit` uses for an aborted
+            // (empty-message) commit.
             if body.is_empty() {
                 eprintln!("empty note, nothing saved");
-                return Ok(0);
+                return Ok(2);
             }
             let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
             writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
