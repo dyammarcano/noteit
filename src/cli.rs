@@ -273,8 +273,22 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
             let limit = effective_limit(a.limit);
             if let Some(tag) = a.tag {
                 let scope = if a.global { None } else { Some(ctx.id) };
-                let total = store.notes_by_tag(&tag, scope, a.all, None)?.len();
-                let rows = store.notes_by_tag(&tag, scope, a.all, limit)?;
+                let all = store.notes_by_tag(&tag, scope, a.all, None)?;
+                let total = all.len();
+                let mut rows = all;
+                // render_grouped requires rows sorted by context -- unsorted
+                // input repeats a project's header. Sort before truncating so
+                // the cap applies to what is actually shown.
+                if a.global && !a.flat {
+                    rows.sort_by(|x, y| {
+                        x.0.display_name
+                            .cmp(&y.0.display_name)
+                            .then(y.1.created_at.cmp(&x.1.created_at))
+                    });
+                }
+                if let Some(n) = limit {
+                    rows.truncate(n);
+                }
                 if a.global {
                     let s = if a.flat {
                         render::render_flat(&rows, total, limit)
