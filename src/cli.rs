@@ -182,6 +182,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
 }
 
 use std::io::Write;
+use std::path::Path;
 
 use crate::context::{adopt_if_needed, resolve};
 use crate::render;
@@ -257,6 +258,16 @@ pub fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
     Ok(body.trim().to_string())
 }
 
+/// Run the CLI end to end.
+///
+/// # Exit codes
+/// - `0` — success (note captured, list/search rendered, status changed,
+///   rename applied, `--help`/`--version` printed, or an `adopt --undo` with
+///   nothing to undo).
+/// - `1` — not-found: `done`/`open` given an id with no matching note.
+/// - `2` — usage error: a `parse` failure, an empty/whitespace capture (via
+///   `add`/bare text/`new`), or `done`/`open` given a syntactically invalid
+///   id.
 pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     let inv = match parse(args) {
         Ok(i) => i,
@@ -284,9 +295,27 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     // second DB, do not skip the migration.
     let db = default_db_path()?;
     let mut store = Store::open(&db)?;
-
     let cwd = std::env::current_dir()?;
-    let resolved = resolve(&store, &cwd)?;
+    let mut out = std::io::stdout().lock();
+    run_core(inv, &mut store, &cwd, &mut out)
+}
+
+/// The post-setup dispatch logic, extracted from [`run`] so it can be driven
+/// in-process against an already-open [`Store`], an arbitrary `cwd`, and an
+/// output sink -- without touching the real DB, environment, or stdout.
+/// Behavior must stay identical to what `run` did inline before this split.
+///
+/// Public so integration tests (a separate crate) can call it directly, but
+/// not part of the CLI's stable public API -- it takes an already-parsed
+/// `Invocation` and internal types, not command-line arguments.
+#[doc(hidden)]
+pub fn run_core(
+    inv: Invocation,
+    store: &mut Store,
+    cwd: &Path,
+    out: &mut dyn Write,
+) -> Result<i32, Box<dyn std::error::Error>> {
+    let resolved = resolve(store, cwd)?;
     if let Some(w) = &resolved.warning {
         eprintln!("warning: {w}");
     }
@@ -296,7 +325,7 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     // running auto-adopt right before undoing it would be pointless work
     // and semantically confusing (adopt-then-undo in one invocation).
     if !matches!(inv, Invocation::Adopt { undo: true })
-        && let Some(r) = adopt_if_needed(&mut store, &resolved)?
+        && let Some(r) = adopt_if_needed(store, &resolved)?
     {
         eprintln!(
             "adopted {} notes from {} paths into {}",
@@ -310,7 +339,6 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     // invocation for no behavioral difference.
     let ctx = &resolved.context;
 
-    let mut out = std::io::stdout().lock();
     match inv {
         Invocation::Capture(body) => {
             if body.trim().is_empty() {
