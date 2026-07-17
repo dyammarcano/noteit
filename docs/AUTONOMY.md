@@ -63,6 +63,19 @@ required; scope satisfied (3 items shipped). On stop → wrap-up summary.
 
 _(forks settled autonomously appended here as work proceeds)_
 
+### Item 3 — shallow-submodule re-adopt — approach settled 2026-07-17
+- **Investigate-first, not fix-first.** Analysis suggests the scenario may
+  ALREADY work: after `git fetch --unshallow`, `resolve()` inside the now-full
+  submodule returns a Repo context, and `adopt_if_needed` scans
+  `path_contexts_under(submodule_root)` — which includes the submodule's own
+  shallow-era path context — and the submodule guard finds matching roots →
+  adoptable → self-adopts. So: write a test reproducing the full scenario
+  (shallow submodule → capture inside → `--unshallow` → re-run). If it PASSES
+  unmodified, keep it as a regression guard and correct the BACKLOG entry to
+  "verified: self-adopts on next in-dir run after --unshallow". If it FAILS,
+  implement the minimal re-check and note the mechanism. Either outcome is a
+  valid item completion.
+
 ### Item 2 — single-query list/search/tag — forks settled 2026-07-17
 - **API shape:** collapse the count+fetch double query by changing the four
   read methods (`list_notes`, `list_all_notes`, `search`, `notes_by_tag`) to
