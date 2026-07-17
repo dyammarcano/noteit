@@ -74,6 +74,44 @@ fn editor_nonzero_exit_preserves_typed_text() {
 }
 
 #[test]
+fn editor_happy_path_returns_trimmed_body() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let script = fake_editor(dir.path(), "a fresh note from the editor", 0);
+
+    // SAFETY: guarded by ENV_LOCK above; no other thread touches EDITOR.
+    unsafe {
+        std::env::set_var("EDITOR", &script);
+    }
+    let result = edit_in_editor();
+    unsafe {
+        std::env::remove_var("EDITOR");
+    }
+
+    let body = result.expect("a zero-exit editor must return Ok(body)");
+    assert_eq!(body, "a fresh note from the editor");
+}
+
+#[test]
+fn editor_spawn_failure_is_an_error() {
+    let _guard = ENV_LOCK.lock().unwrap();
+
+    // SAFETY: guarded by ENV_LOCK above; no other thread touches EDITOR.
+    unsafe {
+        std::env::set_var("EDITOR", "noteit-nonexistent-editor-binary-xyz");
+    }
+    let result = edit_in_editor();
+    unsafe {
+        std::env::remove_var("EDITOR");
+    }
+
+    assert!(
+        result.is_err(),
+        "spawning a nonexistent editor binary must return an error"
+    );
+}
+
+#[test]
 fn editor_invalid_utf8_surfaces_the_path() {
     let _guard = ENV_LOCK.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
