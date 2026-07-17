@@ -1,6 +1,6 @@
 use noteit::store::Store;
 use noteit::store::contexts::Kind;
-use noteit::store::notes::{parse_tags, Status};
+use noteit::store::notes::{parse_tags, sanitize_fts_query, Status};
 
 #[test]
 fn open_applies_all_migrations() {
@@ -218,6 +218,55 @@ fn search_reflects_edits_via_fts_triggers() {
     // FTS index consistent rather than duplicating the entry.
     store.set_status(n.id, Status::Done).unwrap();
     assert_eq!(store.search("findme", None, None).unwrap().len(), 1);
+}
+
+#[test]
+fn search_with_unbalanced_quote_does_not_error() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    store.add_note(ctx, ".", "has a quote mark").unwrap();
+
+    let result = store.search("\"foo", None, None);
+    assert!(result.is_ok(), "unbalanced quote must not error: {result:?}");
+}
+
+#[test]
+fn search_with_bare_boolean_operator_is_literal() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let n = store.add_note(ctx, ".", "salt AND pepper").unwrap();
+
+    let found = store.search("AND", None, None).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].1.id, n.id);
+}
+
+#[test]
+fn search_multiple_words_requires_all_of_them() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let a = store.add_note(ctx, ".", "tokenizer bug here").unwrap();
+    store.add_note(ctx, ".", "tokenizer only").unwrap();
+
+    let found = store.search("tokenizer bug", None, None).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].1.id, a.id);
+}
+
+#[test]
+fn search_empty_query_returns_no_results() {
+    let store = Store::open_in_memory().unwrap();
+    seed_ctx(&store);
+
+    let found = store.search("   ", None, None).unwrap();
+    assert!(found.is_empty());
+}
+
+#[test]
+fn sanitize_fts_query_quotes_tokens_and_handles_edge_cases() {
+    assert_eq!(sanitize_fts_query("foo bar"), "\"foo\" \"bar\"");
+    assert_eq!(sanitize_fts_query("a\"b"), "\"a\"\"b\"");
+    assert_eq!(sanitize_fts_query("   "), "");
 }
 
 #[test]
