@@ -56,6 +56,14 @@ fn render_list_is_quiet_when_nothing_is_truncated() {
 }
 
 #[test]
+fn render_list_announces_truncation_even_below_the_limit() {
+    // Truncation notice must appear whenever rows were dropped, even if shown < limit.
+    // The old guard (shown >= limit) wrongly suppressed the notice in this case.
+    let out = render_list(&[note(1, "x")], Some(50), 5);
+    assert!(out.contains("4 more"), "{out}");
+}
+
+#[test]
 fn render_list_handles_empty() {
     let out = render_list(&[], None, 0);
     assert!(out.contains("no notes"), "{out}");

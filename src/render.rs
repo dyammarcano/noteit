@@ -5,6 +5,8 @@ const ALPHABET: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
 /// Compact base36 id -- what `list` prints and `done`/`open` accept.
 /// Raw rowids are an implementation detail users should not have to type.
+///
+/// Assumes positive SQLite rowids (>= 1); non-positive input renders `"0"` and does not round-trip.
 pub fn short_id(id: i64) -> String {
     if id <= 0 {
         return "0".to_string();
@@ -39,8 +41,8 @@ fn status_mark(s: Status) -> &'static str {
 }
 
 fn truncation_notice(shown: usize, total: usize, limit: Option<usize>) -> Option<String> {
-    let limit = limit?;
-    if total > shown && shown >= limit {
+    let _limit = limit?;
+    if total > shown {
         Some(format!(
             "\n… {} more (--limit 0 for all)",
             total - shown
@@ -69,6 +71,10 @@ pub fn render_list(notes: &[Note], limit: Option<usize>, total: usize) -> String
     out.trim_end().to_string()
 }
 
+/// Renders notes grouped by context (project).
+///
+/// REQUIRES rows to be pre-sorted by context id; if unsorted, emits repeated project headers
+/// with no error. The caller is responsible for sorting.
 pub fn render_grouped(rows: &[(Context, Note)], total: usize, limit: Option<usize>) -> String {
     if rows.is_empty() {
         return "no notes yet".to_string();
