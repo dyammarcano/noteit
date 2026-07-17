@@ -9,3 +9,6 @@ docs/analysis/.harden/
 
 # internal orchestration reports (not shipped)
 /.superpowers/
+
+# local Claude Code settings (not shipped)
+/.claude/
