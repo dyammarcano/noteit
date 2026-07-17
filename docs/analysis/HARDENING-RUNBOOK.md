@@ -1,5 +1,5 @@
 # Hardening Runbook — noteit (2026-07-17)
-<!-- rev:002 -->
+<!-- rev:003 -->
 
 **Baseline stage:** 2/5 (Beta)   **Target:** 4/5 (Production)   **Language:** Rust (Cargo, edition 2024)
 
@@ -267,7 +267,23 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** [H-13]
 - **Target-stage impact:** Testing & Coverage dimension (weight 5, highest in
   scorecard) C→B; closes the single largest coverage hole in the project.
-- **Outcome:** _pending_
+- **Outcome:** DONE (9352749). `run()` was split into a thin real-IO shell
+  (handles `--help`/`--version` before opening the DB, then opens the real DB
+  via `default_db_path()`, reads `current_dir()`, locks stdout) and a new
+  `pub fn run_core(inv, store: &mut Store, cwd: &Path, out: &mut dyn Write)`
+  carrying all the dispatch logic, `#[doc(hidden)]` but `pub` (not
+  `pub(crate)`) so the separate-crate `tests/` binaries can call it directly.
+  Added `tests/run.rs` (16 tests) driving `run_core` against
+  `Store::open_in_memory()` and fixture git repos from `tests/common/mod.rs`,
+  covering: capture success/empty, list (current/global/flat/tag/all/limit 0),
+  search (local/global), set-status (done+open success, not-found ⇒ 1,
+  invalid-id ⇒ 2), rename, and adopt --undo (both the no-op and a real
+  fold-then-undo round trip). `cargo llvm-cov` was attempted to quantify the
+  rise but proved impractically slow on this project (a fully instrumented
+  rebuild recompiling `gix` and the `rusqlite` bundled-SQLite C sources);
+  measurement was abandoned per the controller's direction — the coverage
+  delta is asserted qualitatively (every `run_core` branch above now has a
+  passing in-process test) rather than numerically confirmed here.
 
 ### H-13 Add coverage for `edit_in_editor()` ($EDITOR/$VISUAL path)
 - **Dimension:** test-coverage   **Severity:** Medium   **Leverage:** 3
@@ -285,7 +301,12 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Removes an untested IO/subprocess integration
   point; couples naturally with H-01/H-02's fixes.
-- **Outcome:** _pending_
+- **Outcome:** DONE (696056a). Added `editor_happy_path_returns_trimmed_body`
+  (fake `$EDITOR` writes fixed text, exits 0 → asserts `Ok(body)` with the
+  exact trimmed text) and `editor_spawn_failure_is_an_error` (`$EDITOR` set to
+  a nonexistent binary → asserts `Err`) to `tests/editor.rs`, alongside the
+  pre-existing non-zero-exit and invalid-UTF-8 tests. All 4 editor tests pass
+  on Windows.
 
 ### H-14 Add coverage for the 2 untested `render.rs` functions
 - **Dimension:** test-coverage   **Severity:** Low   **Leverage:** 2
@@ -299,7 +320,12 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Moderate; exercises real branching logic
   (grouped vs flat, truncation counts).
-- **Outcome:** _pending_
+- **Outcome:** DONE (d55a4a2). The 2 uncalled functions were `render_flat`
+  and `render_grouped`'s empty-input branch. Added
+  `render_flat_handles_empty`, `render_flat_shows_context_name_and_body_inline`,
+  `render_flat_announces_truncation`, `render_flat_is_quiet_when_nothing_is_truncated`,
+  and `render_grouped_handles_empty` to `tests/render.rs` (14 tests total in
+  that file, up from 9).
 
 ### H-15 Add a thin `assert_cmd` test for `main.rs`
 - **Dimension:** test-coverage   **Severity:** Low   **Leverage:** 1
@@ -312,7 +338,13 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `cargo llvm-cov --summary-only`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Cosmetic coverage-number improvement only.
-- **Outcome:** _pending_
+- **Outcome:** DONE (9a9bf27). Added `assert_cmd` + `predicates` as
+  dev-dependencies and `tests/main_smoke.rs`: spawns the built `noteit`
+  binary with `noteit --version`, asserts success and that stdout contains
+  "noteit", with `HOME`/`USERPROFILE` pointed at a temp dir so it never
+  touches the real DB (moot here since `--version` is handled before the DB
+  opens, but kept for defense-in-depth / future smoke tests added to this
+  file).
 
 ### H-16 Rename misleading test `new_opens_the_editor`
 - **Dimension:** test-quality   **Severity:** Low   **Leverage:** 1
@@ -325,7 +357,8 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Low; prevents a future maintainer from believing
   editor-invocation is covered when it isn't (until H-13 lands).
-- **Outcome:** _pending_
+- **Outcome:** DONE (02bf92c). Renamed to `new_parses_as_the_new_invocation`;
+  the real editor-invocation coverage lives in `tests/editor.rs` (H-13).
 
 ### H-17 Document `run()`'s exit-code contract (0/1/2)
 - **Dimension:** docs   **Severity:** Low   **Leverage:** 1
@@ -338,7 +371,10 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `cargo doc --no-deps` (manually inspect generated docs for `cli::run`)
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Minor DX improvement; main remaining doc gap of note.
-- **Outcome:** _pending_
+- **Outcome:** DONE — landed alongside the H-12 `run_core` extraction
+  (9352749): `pub fn run` now carries a `/// # Exit codes` doc comment
+  enumerating 0 (success), 1 (not-found), and 2 (usage error / empty note /
+  invalid id).
 
 ---
 

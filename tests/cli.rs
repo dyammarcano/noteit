@@ -128,7 +128,7 @@ fn project_rename_parses() {
 }
 
 #[test]
-fn new_opens_the_editor() {
+fn new_parses_as_the_new_invocation() {
     assert!(matches!(parse(&args(&["new"])).unwrap(), Invocation::New));
 }
 
