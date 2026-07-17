@@ -78,3 +78,66 @@ fn a_repo_with_no_prior_path_notes_reports_no_adoption() {
     let r = resolve(&store, dir.path()).unwrap();
     assert!(adopt_if_needed(&mut store, &r).unwrap().is_none());
 }
+
+#[test]
+fn shallow_nested_repo_is_not_adopted() {
+    // A shallow-cloned submodule has no computable repo id (project_id
+    // fails with Shallow), but it IS a separate repository and must not
+    // have its notes swallowed by the parent when the parent adopts.
+    let origin = common::repo_with_commits(2);
+    let parent = common::repo_with_commits(1);
+
+    let vendor_path = parent.path().join("vendor");
+    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    common::git(
+        parent.path(),
+        &["clone", "-q", "--depth", "1", &url, vendor_path.to_str().unwrap()],
+    );
+
+    // Prove the fixture is genuinely shallow before relying on it.
+    assert!(
+        vendor_path.join(".git").join("shallow").exists(),
+        "vendor clone must have a .git/shallow file to be genuinely shallow"
+    );
+    let err = noteit::repoid::project_id(&vendor_path).unwrap_err();
+    assert!(
+        matches!(err, noteit::repoid::RepoIdError::Shallow),
+        "vendor clone must be identified as Shallow, got {err:?}"
+    );
+
+    let mut store = Store::open_in_memory().unwrap();
+
+    // Capture a note inside the shallow nested repo -- it binds to a PATH
+    // context because project_id fails.
+    let vendor_resolved = resolve(&store, &vendor_path).unwrap();
+    assert_eq!(vendor_resolved.context.kind, Kind::Path);
+    store.add_note(vendor_resolved.context.id, ".", "vendor idea").unwrap();
+
+    // resolve() canonicalizes, so look the context back up by the
+    // canonicalized path, matching the stored key.
+    let vendor_canon =
+        vendor_path.canonicalize().unwrap_or_else(|_| vendor_path.clone());
+    let vendor_key = vendor_canon.to_string_lossy().to_string();
+
+    // Resolve and adopt from the PARENT repo.
+    let parent_resolved = resolve(&store, parent.path()).unwrap();
+    assert_eq!(parent_resolved.context.kind, Kind::Repo);
+    let report = adopt_if_needed(&mut store, &parent_resolved).unwrap();
+    assert!(report.is_none(), "vendor note must not be adopted, got {report:?}");
+
+    // The vendor path context must still exist and still hold the note.
+    let vendor_ctx = store
+        .find_context(Kind::Path, &vendor_key)
+        .unwrap()
+        .expect("vendor path context must still exist");
+    let vendor_notes = store.list_notes(vendor_ctx.id, None, true, None).unwrap();
+    assert_eq!(vendor_notes.len(), 1, "vendor note must remain in its own path context");
+
+    // The parent repo context must NOT contain the vendor note.
+    let parent_notes =
+        store.list_notes(parent_resolved.context.id, None, true, None).unwrap();
+    assert!(
+        parent_notes.iter().all(|n| n.subpath != "vendor"),
+        "vendor note must not have been folded into the parent repo context"
+    );
+}

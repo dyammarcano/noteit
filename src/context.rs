@@ -113,14 +113,26 @@ pub fn adopt_if_needed(
         return Ok(None);
     }
 
-    // Submodule guard: a nested dir that resolves to a DIFFERENT repo id
-    // owns its own notes and must not be swallowed by the parent.
+    // Submodule guard: a nested dir whose repository ROOT differs from this
+    // repo's root belongs to a different repository and must not be
+    // swallowed by the parent. Comparing roots (not ids) matters because
+    // `project_id` fails for shallow clones and zero-commit repos -- both
+    // are still separate repositories that must not lose their notes.
+    let adopting_root = std::path::Path::new(&root);
+    let adopting_root_canon =
+        adopting_root.canonicalize().unwrap_or_else(|_| adopting_root.to_path_buf());
     let mut adoptable = Vec::new();
     for c in candidates {
         let p = std::path::Path::new(&c.root_path);
-        match repoid::project_id(p) {
-            Ok(id) if id.as_str() != resolved.context.key => continue,
-            _ => adoptable.push(c),
+        match repoid::repo_root(p) {
+            Ok(r) => {
+                let r_canon = r.canonicalize().unwrap_or(r);
+                if r_canon != adopting_root_canon {
+                    continue; // different repository, whatever its state
+                }
+                adoptable.push(c);
+            }
+            Err(_) => adoptable.push(c), // not a repo at all
         }
     }
     if adoptable.is_empty() {
