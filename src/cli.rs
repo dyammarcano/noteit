@@ -295,13 +295,13 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     // so a wrong fold must never be invisible. Skipped for `adopt --undo`:
     // running auto-adopt right before undoing it would be pointless work
     // and semantically confusing (adopt-then-undo in one invocation).
-    if !matches!(inv, Invocation::Adopt { undo: true }) {
-        if let Some(r) = adopt_if_needed(&mut store, &resolved)? {
-            eprintln!(
-                "adopted {} notes from {} paths into {}",
-                r.notes_moved, r.paths_folded, r.project
-            );
-        }
+    if !matches!(inv, Invocation::Adopt { undo: true })
+        && let Some(r) = adopt_if_needed(&mut store, &resolved)?
+    {
+        eprintln!(
+            "adopted {} notes from {} paths into {}",
+            r.notes_moved, r.paths_folded, r.project
+        );
     }
     // No re-resolve needed: adopt_if_needed only folds OTHER path-contexts'
     // notes INTO this resolved context -- it never changes `resolved`'s own

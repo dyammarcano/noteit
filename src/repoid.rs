@@ -74,7 +74,7 @@ pub fn project_id(dir: &Path) -> Result<RepoId, RepoIdError> {
             let hex = info.id().to_string();
             // Lexicographically smallest wins, matching lensr's strcmp
             // selection so multi-root repos agree across tools.
-            if best.as_ref().map_or(true, |b| hex < *b) {
+            if best.as_ref().is_none_or(|b| hex < *b) {
                 best = Some(hex);
             }
         }
