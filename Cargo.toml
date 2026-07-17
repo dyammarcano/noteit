@@ -25,5 +25,9 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 thiserror = "2.0"
 tempfile = "3.27"
 
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
