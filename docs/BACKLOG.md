@@ -1,5 +1,5 @@
 # BACKLOG
-<!-- rev:002 -->
+<!-- rev:003 -->
 
 Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
@@ -15,6 +15,12 @@ blocks the current release; each item is tracked so it isn't lost.
   adoption: recreates the folded path contexts, moves the notes back, and
   *pins* those contexts (`no_adopt = 1`, via a v2 migration) so automatic
   adoption never re-folds them on a later run.
+- **`noteit delete <id>`** (hard delete) — done. Permanent, **context-scoped**
+  deletion (you can only delete a note visible in the current context — safer
+  than done/open's global-by-id for a destructive op). No interactive prompt;
+  prints what was removed. Cleanup rides the `notes_ad` FTS trigger +
+  `note_tags ON DELETE CASCADE`. The one authorized exception to
+  "never lose a note".
 
 ## Double-counted queries on `list` / `search` / `--tag`
 
@@ -31,7 +37,6 @@ expected note-table sizes, but worth collapsing into a single query (e.g.
 - Sync (multi-machine note synchronization).
 - Encryption of the SQLite database at rest.
 - Attachments (non-text note content).
-- Real note deletion — `done`/`open` toggle status; there is no hard delete.
 
 ## Shallow-clone submodule adoption
 
