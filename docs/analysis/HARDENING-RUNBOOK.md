@@ -1,5 +1,5 @@
 # Hardening Runbook — noteit (2026-07-17)
-<!-- rev:001 -->
+<!-- rev:002 -->
 
 **Baseline stage:** 2/5 (Beta)   **Target:** 4/5 (Production)   **Language:** Rust (Cargo, edition 2024)
 
@@ -128,7 +128,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** [H-05, H-06, H-10]
 - **Target-stage impact:** CI/CD & Release dimension F→C+ immediately; the
   single highest-leverage move in this runbook.
-- **Outcome:** _pending_
+- **Outcome:** DONE c4b209e — `.github/workflows/ci.yml` added (fmt/clippy/test
+  job + separate cargo-audit job); no remote configured yet so it will
+  activate on first push.
 
 ### H-05 Run `cargo fmt` across the tree (formatting-only commit)
 - **Dimension:** lint   **Severity:** Medium   **Leverage:** 2
@@ -142,7 +144,8 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Removes onboarding friction / noisy diffs; trivial
   one-shot fix.
-- **Outcome:** _pending_
+- **Outcome:** DONE 42eb867 — `cargo fmt` run tree-wide, `cargo fmt --check`
+  exits 0, 74 tests still pass.
 
 ### H-06 Add clippy-deny-warnings gate and fix the 5 outstanding warning classes
 - **Dimension:** lint   **Severity:** High   **Leverage:** 5
@@ -156,7 +159,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** [H-07, H-08, H-09]
 - **Target-stage impact:** Without this gate, every clippy finding fixed once
   can silently regress; highest-leverage lint-dimension change alongside H-04.
-- **Outcome:** _pending_
+- **Outcome:** DONE 7074aff — `[lints.clippy] all = { level = "deny", priority
+  = -1 }` added to Cargo.toml; `cargo clippy --all-targets` exits 0 (tree was
+  already clean from H-07/H-08/H-09).
 
 ### H-07 Fix `clippy::collapsible_if` in `src/cli.rs:248`
 - **Dimension:** lint   **Severity:** Low   **Leverage:** 2
@@ -168,7 +173,8 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `cargo clippy --all-targets`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Cosmetic; no behavior change.
-- **Outcome:** _pending_
+- **Outcome:** DONE aefda69 — collapsed via the let-chain form (compiled fine
+  on rustc 1.96.0); `cargo clippy --all-targets` reports zero warnings.
 
 ### H-08 Fix `clippy::unnecessary_map_or` in `src/repoid.rs:77`
 - **Dimension:** lint   **Severity:** Low   **Leverage:** 2
@@ -180,7 +186,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Cosmetic; touches well-tested lexicographic
   multi-root-repo logic, no coverage risk.
-- **Outcome:** _pending_
+- **Outcome:** DONE aefda69 — replaced with `.is_none_or(|b| hex < *b)`;
+  `multi_root_repo_picks_lexicographically_smallest` and all repoid tests
+  still pass.
 
 ### H-09 Resolve `tests/common/mod.rs` dead-code warnings (3 helpers)
 - **Dimension:** lint   **Severity:** Low   **Leverage:** 1
@@ -200,7 +208,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `cargo clippy --all-targets`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Low; one edit clears 3 warnings project-wide.
-- **Outcome:** _pending_
+- **Outcome:** DONE aefda69 — added `#![allow(dead_code)]` as the first line
+  of `tests/common/mod.rs`; all 3 helper warnings gone across every test
+  binary.
 
 ### H-10 Install and wire `cargo-audit` into CI
 - **Dimension:** ci-dx / security   **Severity:** Medium   **Leverage:** 3
@@ -215,7 +225,10 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Security dimension C→B; low urgency for a small CLI
   but easy to close alongside H-04.
-- **Outcome:** _pending_
+- **Outcome:** DONE c4b209e — `cargo install cargo-audit` (v0.22.2) succeeded;
+  `cargo audit` scanned 179 crate dependencies against 1166 advisories with
+  **0 vulnerabilities found**; wired as a blocking job in `ci.yml`. No
+  `audit.toml` needed.
 
 ### H-11 Add `rust-toolchain.toml` pinning the edition-2024 minimum toolchain
 - **Dimension:** ci-dx   **Severity:** Low   **Leverage:** 2
@@ -227,7 +240,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `Test-Path D:\rust\noteit\rust-toolchain.toml`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Minor DX friction removal.
-- **Outcome:** _pending_
+- **Outcome:** DONE 7dee57c — `rust-toolchain.toml` pinning channel "1.96.0"
+  with rustfmt+clippy components added; `cargo test` still builds/passes (74
+  tests) under the pinned toolchain.
 
 ---
 
