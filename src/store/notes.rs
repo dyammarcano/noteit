@@ -1,9 +1,9 @@
-use rusqlite::{params, Row};
+use rusqlite::{Row, params};
 
 // Shared helpers -- do NOT re-declare these here. `row_to_context` and
 // `CTX_COLS` are defined once in contexts.rs; `now()` once in mod.rs.
-use super::contexts::{row_to_context, Context, CTX_COLS};
-use super::{now, Store, StoreError};
+use super::contexts::{CTX_COLS, Context, row_to_context};
+use super::{Store, StoreError, now};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -76,7 +76,8 @@ pub fn sanitize_fts_query(raw: &str) -> String {
         .join(" ")
 }
 
-const NOTE_COLS: &str = "n.id, n.context_id, n.subpath, n.body, n.status, n.created_at, n.updated_at";
+const NOTE_COLS: &str =
+    "n.id, n.context_id, n.subpath, n.body, n.status, n.created_at, n.updated_at";
 
 fn row_to_note(row: &Row<'_>, offset: usize) -> rusqlite::Result<Note> {
     Ok(Note {
@@ -98,12 +99,7 @@ fn limit_clause(limit: Option<usize>) -> String {
 }
 
 impl Store {
-    pub fn add_note(
-        &self,
-        context_id: i64,
-        subpath: &str,
-        body: &str,
-    ) -> Result<Note, StoreError> {
+    pub fn add_note(&self, context_id: i64, subpath: &str, body: &str) -> Result<Note, StoreError> {
         let ts = now();
         self.conn()
             .execute(
@@ -116,11 +112,16 @@ impl Store {
 
         for tag in parse_tags(body) {
             self.conn()
-                .execute("INSERT OR IGNORE INTO tags (name) VALUES (?1)", params![tag])
+                .execute(
+                    "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
+                    params![tag],
+                )
                 .map_err(StoreError::Sqlite)?;
             let tag_id: i64 = self
                 .conn()
-                .query_row("SELECT id FROM tags WHERE name = ?1", params![tag], |r| r.get(0))
+                .query_row("SELECT id FROM tags WHERE name = ?1", params![tag], |r| {
+                    r.get(0)
+                })
                 .map_err(StoreError::Sqlite)?;
             self.conn()
                 .execute(

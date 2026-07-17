@@ -1,6 +1,6 @@
 use noteit::store::Store;
 use noteit::store::contexts::Kind;
-use noteit::store::notes::{parse_tags, sanitize_fts_query, Status};
+use noteit::store::notes::{Status, parse_tags, sanitize_fts_query};
 
 #[test]
 fn open_applies_all_migrations() {
@@ -38,7 +38,14 @@ fn v2_adds_no_adopt_column() {
 #[test]
 fn expected_tables_exist() {
     let store = Store::open_in_memory().expect("open");
-    for t in ["contexts", "notes", "tags", "note_tags", "adoptions", "notes_fts"] {
+    for t in [
+        "contexts",
+        "notes",
+        "tags",
+        "note_tags",
+        "adoptions",
+        "notes_fts",
+    ] {
         let n: i64 = store
             .conn()
             .query_row(
@@ -55,10 +62,20 @@ fn expected_tables_exist() {
 fn upsert_context_is_idempotent_on_kind_and_key() {
     let store = Store::open_in_memory().unwrap();
     let a = store
-        .upsert_context(Kind::Repo, "urn:noteit:v1:abc", "noteit", "D:\\rust\\noteit")
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:abc",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
         .unwrap();
     let b = store
-        .upsert_context(Kind::Repo, "urn:noteit:v1:abc", "noteit", "D:\\rust\\noteit")
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:abc",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
         .unwrap();
     assert_eq!(a.id, b.id);
 }
@@ -69,11 +86,21 @@ fn rename_survives_a_later_upsert() {
     // basename and silently reverts the rename.
     let store = Store::open_in_memory().unwrap();
     let c = store
-        .upsert_context(Kind::Repo, "urn:noteit:v1:abc", "noteit", "D:\\rust\\noteit")
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:abc",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
         .unwrap();
     store.rename_context(c.id, "My Project").unwrap();
     let again = store
-        .upsert_context(Kind::Repo, "urn:noteit:v1:abc", "noteit", "D:\\rust\\noteit")
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:abc",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
         .unwrap();
     assert_eq!(again.display_name, "My Project");
     assert!(again.name_overridden);
@@ -82,70 +109,149 @@ fn rename_survives_a_later_upsert() {
 #[test]
 fn path_contexts_under_finds_descendants_only() {
     let store = Store::open_in_memory().unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\noteit", "noteit", "D:\\rust\\noteit").unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\noteit\\src", "src", "D:\\rust\\noteit\\src").unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\other", "other", "D:\\rust\\other").unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
+        .unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit\\src",
+            "src",
+            "C:\\projects\\noteit\\src",
+        )
+        .unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\other",
+            "other",
+            "C:\\projects\\other",
+        )
+        .unwrap();
 
-    let found = store.path_contexts_under("D:\\rust\\noteit").unwrap();
+    let found = store.path_contexts_under("C:\\projects\\noteit").unwrap();
     let keys: Vec<&str> = found.iter().map(|c| c.key.as_str()).collect();
     assert_eq!(keys.len(), 2, "got {keys:?}");
-    assert!(keys.contains(&"D:\\rust\\noteit"));
-    assert!(keys.contains(&"D:\\rust\\noteit\\src"));
-    assert!(!keys.contains(&"D:\\rust\\other"));
+    assert!(keys.contains(&"C:\\projects\\noteit"));
+    assert!(keys.contains(&"C:\\projects\\noteit\\src"));
+    assert!(!keys.contains(&"C:\\projects\\other"));
 }
 
 #[test]
 fn path_contexts_under_excludes_adjacent_prefix_siblings() {
     // This test verifies that path_contexts_under() correctly excludes sibling directories
     // that share a string prefix but are NOT true descendants. The dangerous case is a
-    // directory like "D:\rust\noteit-other" that starts with the root's key but lacks a
+    // directory like "C:\\projects\\noteit-other" that starts with the root's key but lacks a
     // path separator, which a naive LIKE pattern would incorrectly match.
     // If this breaks, a future feature that folds notes by project path would silently
     // swallow a different project's notes.
     let store = Store::open_in_memory().unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\noteit", "noteit", "D:\\rust\\noteit").unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\noteit\\src", "src", "D:\\rust\\noteit\\src").unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\noteit-other", "noteit-other", "D:\\rust\\noteit-other").unwrap();
-    store.upsert_context(Kind::Path, "D:\\rust\\noteitXother", "noteitXother", "D:\\rust\\noteitXother").unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
+        .unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit\\src",
+            "src",
+            "C:\\projects\\noteit\\src",
+        )
+        .unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit-other",
+            "noteit-other",
+            "C:\\projects\\noteit-other",
+        )
+        .unwrap();
+    store
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteitXother",
+            "noteitXother",
+            "C:\\projects\\noteitXother",
+        )
+        .unwrap();
 
-    let found = store.path_contexts_under("D:\\rust\\noteit").unwrap();
+    let found = store.path_contexts_under("C:\\projects\\noteit").unwrap();
     let keys: Vec<&str> = found.iter().map(|c| c.key.as_str()).collect();
     assert_eq!(keys.len(), 2, "got {keys:?}");
-    assert!(keys.contains(&"D:\\rust\\noteit"), "root not found in {keys:?}");
-    assert!(keys.contains(&"D:\\rust\\noteit\\src"), "descendant not found in {keys:?}");
-    assert!(!keys.contains(&"D:\\rust\\noteit-other"), "adjacent-prefix sibling leaked in {keys:?}");
-    assert!(!keys.contains(&"D:\\rust\\noteitXother"), "prefix+char sibling leaked in {keys:?}");
+    assert!(
+        keys.contains(&"C:\\projects\\noteit"),
+        "root not found in {keys:?}"
+    );
+    assert!(
+        keys.contains(&"C:\\projects\\noteit\\src"),
+        "descendant not found in {keys:?}"
+    );
+    assert!(
+        !keys.contains(&"C:\\projects\\noteit-other"),
+        "adjacent-prefix sibling leaked in {keys:?}"
+    );
+    assert!(
+        !keys.contains(&"C:\\projects\\noteitXother"),
+        "prefix+char sibling leaked in {keys:?}"
+    );
 }
 
 #[test]
 fn path_contexts_under_excludes_pinned_contexts() {
     let store = Store::open_in_memory().unwrap();
     let a = store
-        .upsert_context(Kind::Path, "D:\\rust\\noteit", "noteit", "D:\\rust\\noteit")
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
         .unwrap();
     store
-        .upsert_context(Kind::Path, "D:\\rust\\noteit\\src", "src", "D:\\rust\\noteit\\src")
+        .upsert_context(
+            Kind::Path,
+            "C:\\projects\\noteit\\src",
+            "src",
+            "C:\\projects\\noteit\\src",
+        )
         .unwrap();
     store
         .conn()
         .execute("UPDATE contexts SET no_adopt = 1 WHERE id = ?1", [a.id])
         .unwrap();
 
-    let found = store.path_contexts_under("D:\\rust\\noteit").unwrap();
+    let found = store.path_contexts_under("C:\\projects\\noteit").unwrap();
     let keys: Vec<&str> = found.iter().map(|c| c.key.as_str()).collect();
-    assert_eq!(keys, vec!["D:\\rust\\noteit\\src"], "got {keys:?}");
+    assert_eq!(keys, vec!["C:\\projects\\noteit\\src"], "got {keys:?}");
 }
 
 fn seed_ctx(store: &Store) -> i64 {
     store
-        .upsert_context(Kind::Repo, "urn:noteit:v1:abc", "noteit", "D:\\rust\\noteit")
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:abc",
+            "noteit",
+            "C:\\projects\\noteit",
+        )
         .unwrap()
         .id
 }
 
 #[test]
 fn parse_tags_extracts_hashtags() {
-    assert_eq!(parse_tags("fix the #fts5 tokenizer #perf"), vec!["fts5", "perf"]);
+    assert_eq!(
+        parse_tags("fix the #fts5 tokenizer #perf"),
+        vec!["fts5", "perf"]
+    );
     assert_eq!(parse_tags("no tags here"), Vec::<String>::new());
     // Deduped, lowercased.
     assert_eq!(parse_tags("#Perf and #perf"), vec!["perf"]);
@@ -226,7 +332,12 @@ fn search_finds_by_body_and_scopes_by_context() {
     let store = Store::open_in_memory().unwrap();
     let a = seed_ctx(&store);
     let b = store
-        .upsert_context(Kind::Repo, "urn:noteit:v1:def", "other", "D:\\rust\\other")
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:def",
+            "other",
+            "C:\\projects\\other",
+        )
         .unwrap()
         .id;
     store.add_note(a, ".", "tokenizer bug").unwrap();
@@ -256,7 +367,10 @@ fn search_with_unbalanced_quote_does_not_error() {
     store.add_note(ctx, ".", "has a quote mark").unwrap();
 
     let result = store.search("\"foo", None, None);
-    assert!(result.is_ok(), "unbalanced quote must not error: {result:?}");
+    assert!(
+        result.is_ok(),
+        "unbalanced quote must not error: {result:?}"
+    );
 }
 
 #[test]

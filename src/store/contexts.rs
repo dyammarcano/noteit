@@ -1,4 +1,4 @@
-use rusqlite::{params, Row};
+use rusqlite::{Row, params};
 
 use super::{Store, StoreError};
 
@@ -328,13 +328,13 @@ impl Store {
 
             if !row.note_ids.is_empty() {
                 for id_str in row.note_ids.split(',') {
-                    let note_id: i64 = id_str
-                        .parse()
-                        .map_err(|_| StoreError::Sqlite(rusqlite::Error::InvalidColumnType(
+                    let note_id: i64 = id_str.parse().map_err(|_| {
+                        StoreError::Sqlite(rusqlite::Error::InvalidColumnType(
                             0,
                             "note_ids".to_string(),
                             rusqlite::types::Type::Text,
-                        )))?;
+                        ))
+                    })?;
                     let n = tx
                         .execute(
                             "UPDATE notes SET context_id = ?1, subpath = '.' WHERE id = ?2",
@@ -351,7 +351,10 @@ impl Store {
         }
 
         tx.commit().map_err(StoreError::Sqlite)?;
-        Ok(Some(UndoReport { notes_restored, paths_restored }))
+        Ok(Some(UndoReport {
+            notes_restored,
+            paths_restored,
+        }))
     }
 }
 

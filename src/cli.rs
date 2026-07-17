@@ -4,8 +4,9 @@ use crate::store::notes::Status;
 /// dispatches that verb; ANYTHING else is note text. The set is small and
 /// known at parse time, which is what makes the rule unambiguous despite
 /// looking magical. `add` is the escape hatch for colliding text.
-pub const VERBS: &[&str] =
-    &["add", "list", "search", "new", "done", "open", "project", "adopt"];
+pub const VERBS: &[&str] = &[
+    "add", "list", "search", "new", "done", "open", "project", "adopt",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
@@ -23,7 +24,9 @@ pub enum CliError {
     TagNeedsValue,
     #[error("unknown flag: {0}")]
     UnknownFlag(String),
-    #[error("usage: noteit adopt --undo  (adoption is automatic; --undo reverses the most recent one)")]
+    #[error(
+        "usage: noteit adopt --undo  (adoption is automatic; --undo reverses the most recent one)"
+    )]
     AdoptNeedsUndo,
 }
 
@@ -138,14 +141,28 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             if query.is_empty() {
                 return Err(CliError::SearchNeedsQuery);
             }
-            Ok(Invocation::Search { query: query.join(" "), global })
+            Ok(Invocation::Search {
+                query: query.join(" "),
+                global,
+            })
         }
         "done" | "open" => {
-            let id = rest.first().ok_or(CliError::StatusNeedsId(
-                if first == "done" { "done" } else { "open" },
-            ))?;
-            let status = if first == "done" { Status::Done } else { Status::Open };
-            Ok(Invocation::SetStatus { id: id.clone(), status })
+            let id = rest
+                .first()
+                .ok_or(CliError::StatusNeedsId(if first == "done" {
+                    "done"
+                } else {
+                    "open"
+                }))?;
+            let status = if first == "done" {
+                Status::Done
+            } else {
+                Status::Open
+            };
+            Ok(Invocation::SetStatus {
+                id: id.clone(),
+                status,
+            })
         }
         "project" => {
             if rest.first().map(String::as_str) != Some("rename") || rest.len() < 2 {
@@ -168,42 +185,75 @@ use std::io::Write;
 
 use crate::context::{adopt_if_needed, resolve};
 use crate::render;
-use crate::store::{default_db_path, Store};
+use crate::store::{Store, default_db_path};
 
 const DEFAULT_LIMIT: usize = 50;
 
 fn effective_limit(requested: Option<usize>) -> Option<usize> {
     match requested {
-        Some(0) => None,        // --limit 0 means everything
+        Some(0) => None, // --limit 0 means everything
         Some(n) => Some(n),
         None => Some(DEFAULT_LIMIT),
     }
 }
 
 /// Open a note body in $EDITOR (or $VISUAL) via a temp file.
-fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
+pub fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
     let editor = std::env::var("VISUAL")
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| {
-            if cfg!(windows) { "notepad".to_string() } else { "vi".to_string() }
+            if cfg!(windows) {
+                "notepad".to_string()
+            } else {
+                "vi".to_string()
+            }
         });
-    let dir = std::env::temp_dir();
-    let path = dir.join(format!("noteit-{}.md", std::process::id()));
-    std::fs::write(&path, "")?;
+    // A NamedTempFile is created with an unpredictable name and exclusive
+    // access, unlike the old `noteit-<pid>.md` path -- predictable temp
+    // paths are a symlink/collision hazard on shared systems. Convert to a
+    // TempPath immediately: this closes our handle to the file, which
+    // matters on Windows where an editor process cannot open a file that
+    // this process still holds open.
+    let tmp = tempfile::Builder::new()
+        .suffix(".md")
+        .tempfile()?
+        .into_temp_path();
+    let path = tmp.to_path_buf();
 
-    let status = match std::process::Command::new(&editor).arg(&path).status() {
-        Ok(s) => s,
+    let status = std::process::Command::new(&editor).arg(&path).status()?;
+
+    if !status.success() {
+        // Never delete text the user already typed: on a non-zero editor
+        // exit, read back whatever is there and only discard it if it is
+        // genuinely empty. `tmp` is intentionally NOT dropped-and-cleaned
+        // here -- `.keep()` hands over ownership of the path so the file
+        // survives past this function returning an error.
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        if existing.trim().is_empty() {
+            return Err(format!("{editor} exited with {status}").into());
+        }
+        let kept_path = tmp.keep()?;
+        return Err(format!(
+            "{editor} exited with {status}; your note text was preserved at {}",
+            kept_path.display()
+        )
+        .into());
+    }
+    let body = match std::fs::read_to_string(&path) {
+        Ok(b) => b,
         Err(e) => {
-            let _ = std::fs::remove_file(&path);
-            return Err(e.into());
+            // Non-UTF-8 (or otherwise unreadable) content: keep the file
+            // and tell the user exactly where it is rather than silently
+            // losing it. Persist via `.keep()` since `tmp` would otherwise
+            // delete the file when dropped.
+            let kept_path = tmp.keep()?;
+            return Err(format!(
+                "could not read note from {} (invalid UTF-8): {e}; the file was left in place",
+                kept_path.display()
+            )
+            .into());
         }
     };
-    if !status.success() {
-        let _ = std::fs::remove_file(&path);
-        return Err(format!("{editor} exited with {status}").into());
-    }
-    let body = std::fs::read_to_string(&path)?;
-    let _ = std::fs::remove_file(&path);
     Ok(body.trim().to_string())
 }
 
@@ -245,13 +295,13 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
     // so a wrong fold must never be invisible. Skipped for `adopt --undo`:
     // running auto-adopt right before undoing it would be pointless work
     // and semantically confusing (adopt-then-undo in one invocation).
-    if !matches!(inv, Invocation::Adopt { undo: true }) {
-        if let Some(r) = adopt_if_needed(&mut store, &resolved)? {
-            eprintln!(
-                "adopted {} notes from {} paths into {}",
-                r.notes_moved, r.paths_folded, r.project
-            );
-        }
+    if !matches!(inv, Invocation::Adopt { undo: true })
+        && let Some(r) = adopt_if_needed(&mut store, &resolved)?
+    {
+        eprintln!(
+            "adopted {} notes from {} paths into {}",
+            r.notes_moved, r.paths_folded, r.project
+        );
     }
     // No re-resolve needed: adopt_if_needed only folds OTHER path-contexts'
     // notes INTO this resolved context -- it never changes `resolved`'s own
@@ -268,7 +318,12 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 return Ok(2);
             }
             let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
-            writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
+            writeln!(
+                out,
+                "saved {} to {}",
+                render::short_id(n.id),
+                ctx.display_name
+            )?;
         }
         Invocation::New => {
             let body = edit_in_editor()?;
@@ -282,7 +337,12 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 return Ok(2);
             }
             let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
-            writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
+            writeln!(
+                out,
+                "saved {} to {}",
+                render::short_id(n.id),
+                ctx.display_name
+            )?;
         }
         Invocation::List(a) => {
             let limit = effective_limit(a.limit);
@@ -295,9 +355,15 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 // input repeats a project's header. Sort before truncating so
                 // the cap applies to what is actually shown.
                 if a.global && !a.flat {
+                    // display_name first for stable alphabetical grouping, then
+                    // ctx.id BEFORE created_at so two distinct contexts that
+                    // happen to share a display_name stay contiguous -- otherwise
+                    // render_grouped (which requires contiguity by context) would
+                    // interleave their rows and print duplicate-looking headers.
                     rows.sort_by(|x, y| {
                         x.0.display_name
                             .cmp(&y.0.display_name)
+                            .then(x.0.id.cmp(&y.0.id))
                             .then(y.1.created_at.cmp(&x.1.created_at))
                     });
                 }
@@ -320,9 +386,13 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 let total = all.len();
                 let mut rows = all;
                 if !a.flat {
+                    // See the tag-grouped branch above: ctx.id must sit before
+                    // created_at so same-named-but-distinct contexts stay
+                    // contiguous for render_grouped.
                     rows.sort_by(|x, y| {
                         x.0.display_name
                             .cmp(&y.0.display_name)
+                            .then(x.0.id.cmp(&y.0.id))
                             .then(y.1.created_at.cmp(&x.1.created_at))
                     });
                 }
@@ -364,28 +434,26 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
             store.rename_context(ctx.id, &name)?;
             writeln!(out, "renamed to {name}")?;
         }
-        Invocation::Adopt { undo: true } => {
-            match store.undo_last_adoption(ctx.id)? {
-                Some(report) => {
-                    if report.notes_restored > 0 {
-                        writeln!(
-                            out,
-                            "un-adopted {} notes to {} paths — now path-bound, view with: noteit list --global",
-                            report.notes_restored, report.paths_restored
-                        )?;
-                    } else {
-                        writeln!(
-                            out,
-                            "un-adopted {} notes to {} paths",
-                            report.notes_restored, report.paths_restored
-                        )?;
-                    }
-                }
-                None => {
-                    writeln!(out, "nothing to undo")?;
+        Invocation::Adopt { undo: true } => match store.undo_last_adoption(ctx.id)? {
+            Some(report) => {
+                if report.notes_restored > 0 {
+                    writeln!(
+                        out,
+                        "un-adopted {} notes to {} paths — now path-bound, view with: noteit list --global",
+                        report.notes_restored, report.paths_restored
+                    )?;
+                } else {
+                    writeln!(
+                        out,
+                        "un-adopted {} notes to {} paths",
+                        report.notes_restored, report.paths_restored
+                    )?;
                 }
             }
-        }
+            None => {
+                writeln!(out, "nothing to undo")?;
+            }
+        },
         // Unreachable: parse() rejects bare `adopt` (no --undo) via
         // CliError::AdoptNeedsUndo before an Invocation is ever produced.
         Invocation::Adopt { undo: false } => {

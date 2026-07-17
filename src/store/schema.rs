@@ -92,10 +92,15 @@ pub fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
             continue;
         }
         let tx = conn.transaction().map_err(StoreError::Sqlite)?;
-        tx.execute_batch(sql)
-            .map_err(|e| StoreError::Migration { at: version, source: e })?;
+        tx.execute_batch(sql).map_err(|e| StoreError::Migration {
+            at: version,
+            source: e,
+        })?;
         tx.pragma_update(None, "user_version", version)
-            .map_err(|e| StoreError::Migration { at: version, source: e })?;
+            .map_err(|e| StoreError::Migration {
+                at: version,
+                source: e,
+            })?;
         tx.commit().map_err(StoreError::Sqlite)?;
     }
     Ok(())

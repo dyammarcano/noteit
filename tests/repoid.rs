@@ -1,6 +1,6 @@
 mod common;
 
-use noteit::repoid::{project_id, RepoIdError};
+use noteit::repoid::{RepoIdError, project_id};
 
 #[test]
 fn plain_directory_is_not_a_repo() {
@@ -56,10 +56,20 @@ fn shallow_clone_is_rejected() {
     let clone_path = dest.path().join("shallow");
 
     // file:// forces a real transport, which `--depth` requires.
-    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    let url = format!(
+        "file:///{}",
+        origin.path().to_str().unwrap().replace('\\', "/")
+    );
     common::git(
         dest.path(),
-        &["clone", "-q", "--depth", "1", &url, clone_path.to_str().unwrap()],
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            &url,
+            clone_path.to_str().unwrap(),
+        ],
     );
 
     let err = project_id(&clone_path).unwrap_err();
@@ -82,7 +92,14 @@ fn multi_root_repo_picks_lexicographically_smallest() {
     common::git(dir.path(), &["checkout", "-q", "master"]);
     common::git(
         dir.path(),
-        &["merge", "-q", "--allow-unrelated-histories", "-m", "merge", "second"],
+        &[
+            "merge",
+            "-q",
+            "--allow-unrelated-histories",
+            "-m",
+            "merge",
+            "second",
+        ],
     );
 
     let roots = common::git(dir.path(), &["rev-list", "--max-parents=0", "HEAD"]);

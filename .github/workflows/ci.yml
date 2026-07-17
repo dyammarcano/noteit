@@ -1,0 +1,53 @@
+# NOTE: this repo currently has no git remote configured (local-only
+# worktree). This workflow will activate once the repo is pushed to GitHub.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Honors rust-toolchain.toml automatically via rustup; components
+      # are still declared explicitly here for clarity/caching.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy -D warnings
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --all-targets
+
+  audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # No unfixable advisories were found as of H-10's audit run, so this
+      # step is blocking. If a future advisory has no available fix, add
+      # `continue-on-error: true` here and document the ignored advisory
+      # in audit.toml with a rationale.
+      - name: cargo audit
+        run: cargo audit

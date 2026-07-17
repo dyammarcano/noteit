@@ -1,5 +1,5 @@
 # Hardening Runbook — noteit (2026-07-17)
-<!-- rev:001 -->
+<!-- rev:002 -->
 
 **Baseline stage:** 2/5 (Beta)   **Target:** 4/5 (Production)   **Language:** Rust (Cargo, edition 2024)
 
@@ -63,7 +63,12 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** [H-02, H-13]
 - **Target-stage impact:** Correctness & Robustness dimension B→A; closes the
   audit's single named "never lose a note" violation.
-- **Outcome:** _pending_
+- **Outcome:** DONE (d222b8c). Uses `tempfile::Builder...tempfile()?.into_temp_path()`
+  (releases the handle before the editor opens it — fixes a Windows sharing
+  violation); on non-zero exit with content, `.keep()`s the file and returns an
+  error naming the preserved path. Test `editor_nonzero_exit_preserves_typed_text`
+  parses the path from the error, asserts it exists on disk, and reads the typed
+  text back. Independent verify: PASS.
 
 ### H-02 Surface recovery path when editor temp file is not valid UTF-8
 - **Dimension:** error-handling   **Severity:** Medium   **Leverage:** 2
@@ -80,7 +85,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []  (pairs with H-01; ordered right after it)
 - **Target-stage impact:** Improves recoverability guarantee for the $EDITOR
   capture path; supports the same B→A move as H-01.
-- **Outcome:** _pending_
+- **Outcome:** DONE (5ae98a1). Non-UTF-8 read keeps the file and returns
+  "could not read note from <path> (invalid UTF-8): ...; the file was left in
+  place". Test `editor_invalid_utf8_surfaces_the_path`. Verify: PASS.
 
 ### H-03 Fix `list --global` sort order violating `render_grouped`'s contiguity contract
 - **Dimension:** robustness   **Severity:** Medium   **Leverage:** 2
@@ -100,7 +107,10 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Fixes a real render/grouping defect that could
   mislead users into thinking notes are missing or duplicated.
-- **Outcome:** _pending_
+- **Outcome:** DONE (947ccf0). Both `--global` grouped branches now sort
+  `(display_name, ctx.id, created_at desc)` so same-named/distinct contexts stay
+  contiguous. Test `render_grouped_keeps_same_named_contexts_separate` asserts
+  exactly two "app" header lines. Verify: PASS.
 
 ---
 
@@ -114,11 +124,13 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
   push/PR: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
   `cargo test --all-targets`, and optionally `cargo llvm-cov` for a coverage
   gate/badge.
-- **Verify:** `gh workflow list` (or) `Test-Path D:\rust\noteit\.github\workflows\ci.yml`
+- **Verify:** `gh workflow list` (or) `Test-Path .github\workflows\ci.yml`
 - **Blocks:** [] **Unblocks:** [H-05, H-06, H-10]
 - **Target-stage impact:** CI/CD & Release dimension F→C+ immediately; the
   single highest-leverage move in this runbook.
-- **Outcome:** _pending_
+- **Outcome:** DONE c4b209e — `.github/workflows/ci.yml` added (fmt/clippy/test
+  job + separate cargo-audit job); no remote configured yet so it will
+  activate on first push.
 
 ### H-05 Run `cargo fmt` across the tree (formatting-only commit)
 - **Dimension:** lint   **Severity:** Medium   **Leverage:** 2
@@ -132,7 +144,8 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Removes onboarding friction / noisy diffs; trivial
   one-shot fix.
-- **Outcome:** _pending_
+- **Outcome:** DONE 42eb867 — `cargo fmt` run tree-wide, `cargo fmt --check`
+  exits 0, 74 tests still pass.
 
 ### H-06 Add clippy-deny-warnings gate and fix the 5 outstanding warning classes
 - **Dimension:** lint   **Severity:** High   **Leverage:** 5
@@ -146,7 +159,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** [H-07, H-08, H-09]
 - **Target-stage impact:** Without this gate, every clippy finding fixed once
   can silently regress; highest-leverage lint-dimension change alongside H-04.
-- **Outcome:** _pending_
+- **Outcome:** DONE 7074aff — `[lints.clippy] all = { level = "deny", priority
+  = -1 }` added to Cargo.toml; `cargo clippy --all-targets` exits 0 (tree was
+  already clean from H-07/H-08/H-09).
 
 ### H-07 Fix `clippy::collapsible_if` in `src/cli.rs:248`
 - **Dimension:** lint   **Severity:** Low   **Leverage:** 2
@@ -158,7 +173,8 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `cargo clippy --all-targets`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Cosmetic; no behavior change.
-- **Outcome:** _pending_
+- **Outcome:** DONE aefda69 — collapsed via the let-chain form (compiled fine
+  on rustc 1.96.0); `cargo clippy --all-targets` reports zero warnings.
 
 ### H-08 Fix `clippy::unnecessary_map_or` in `src/repoid.rs:77`
 - **Dimension:** lint   **Severity:** Low   **Leverage:** 2
@@ -170,7 +186,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Cosmetic; touches well-tested lexicographic
   multi-root-repo logic, no coverage risk.
-- **Outcome:** _pending_
+- **Outcome:** DONE aefda69 — replaced with `.is_none_or(|b| hex < *b)`;
+  `multi_root_repo_picks_lexicographically_smallest` and all repoid tests
+  still pass.
 
 ### H-09 Resolve `tests/common/mod.rs` dead-code warnings (3 helpers)
 - **Dimension:** lint   **Severity:** Low   **Leverage:** 1
@@ -190,7 +208,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Verify:** `cargo clippy --all-targets`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Low; one edit clears 3 warnings project-wide.
-- **Outcome:** _pending_
+- **Outcome:** DONE aefda69 — added `#![allow(dead_code)]` as the first line
+  of `tests/common/mod.rs`; all 3 helper warnings gone across every test
+  binary.
 
 ### H-10 Install and wire `cargo-audit` into CI
 - **Dimension:** ci-dx / security   **Severity:** Medium   **Leverage:** 3
@@ -205,7 +225,10 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Security dimension C→B; low urgency for a small CLI
   but easy to close alongside H-04.
-- **Outcome:** _pending_
+- **Outcome:** DONE c4b209e — `cargo install cargo-audit` (v0.22.2) succeeded;
+  `cargo audit` scanned 179 crate dependencies against 1166 advisories with
+  **0 vulnerabilities found**; wired as a blocking job in `ci.yml`. No
+  `audit.toml` needed.
 
 ### H-11 Add `rust-toolchain.toml` pinning the edition-2024 minimum toolchain
 - **Dimension:** ci-dx   **Severity:** Low   **Leverage:** 2
@@ -214,10 +237,12 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
   nothing pins this for new contributors/CI.
 - **Fix approach:** Add `rust-toolchain.toml` pinning a minimum stable channel
   that supports edition 2024 and the let-chains feature used by H-07's fix.
-- **Verify:** `Test-Path D:\rust\noteit\rust-toolchain.toml`
+- **Verify:** `Test-Path rust-toolchain.toml`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Minor DX friction removal.
-- **Outcome:** _pending_
+- **Outcome:** DONE 7dee57c — `rust-toolchain.toml` pinning channel "1.96.0"
+  with rustfmt+clippy components added; `cargo test` still builds/passes (74
+  tests) under the pinned toolchain.
 
 ---
 

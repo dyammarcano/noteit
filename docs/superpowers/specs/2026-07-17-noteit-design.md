@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 **Status:** Approved
-**Target:** `D:\rust\noteit` (greenfield — empty scaffold: `Cargo.toml` with no deps, edition 2024, hello-world `main.rs`)
+**Target:** `/repos/noteit` (greenfield — empty scaffold: `Cargo.toml` with no deps, edition 2024, hello-world `main.rs`)
 
 ## Purpose
 
@@ -20,23 +20,23 @@ The problem it solves: ideas about a project occur while you are *in* the projec
 
 The repo id is the **lexicographically smallest parentless (root) commit SHA reachable from HEAD**, prefixed `urn:noteit:v1:`.
 
-Adopted from lensr, verified by direct source scan:
+Adopted from a prior internal project's implementation, verified by direct source scan:
 
-- `D:\lensr\apps\lensr_git\csrc\git_repo_id.c:38-74` — `compute_root()`: resolve HEAD, revision-walk, keep commits where `commit->parents == NULL`, select min by `strcmp(hex, best) < 0`.
-- `D:\lensr\apps\lensr_git\csrc\git_repo_id.c:84-114` — `lensr_git_project_root()`: forces SHA-1, discovers the git dir without chdir, rejects shallow, then `compute_root`.
-- `D:\lensr\apps\lensr_git\src\repoid.rs:24-45` — validates all-ASCII-hex, prefixes the URN.
+- The reference implementation's `compute_root()`: resolve HEAD, revision-walk, keep commits where `commit->parents == NULL`, select min by `strcmp(hex, best) < 0`.
+- The reference implementation's project-root resolver: forces SHA-1, discovers the git dir without chdir, rejects shallow, then `compute_root`.
+- The reference implementation's repo-id module: validates all-ASCII-hex, prefixes the URN.
 
 The id derives from the repo's own history, which is why it is location-independent.
 
 ### Implementation: `gix`, not linked git C
 
-lensr obtains this by statically linking git's own C source (`build.rs` merges `libgit.a` into the binary; mingw-only; machine-local hardcoded default paths). It is also a `[[bin]]` package with **no `lib.rs`**, so nothing can depend on it.
+The reference implementation obtains this by statically linking git's own C source (`build.rs` merges `libgit.a` into the binary; mingw-only; machine-local hardcoded default paths). It is also a `[[bin]]` package with **no `lib.rs`**, so nothing can depend on it.
 
 noteit re-implements the algorithm over the `gix` crate. **Parity is defined by the SHA payload, not the implementation** — a `gix` port is contract-compatible as long as min-root-hex selection and shallow-rejection match.
 
 ### Namespace
 
-noteit uses `urn:noteit:v1:`, not `urn:lensr:v1:`. The SHA payload is identical, so the SHA is the cross-tool join key if that is ever wanted; the prefix is ours because noteit is not lensr.
+noteit uses its own `urn:noteit:v1:` namespace (distinct from the source project's). The SHA payload is identical, so the SHA is the cross-tool join key if that is ever wanted; the prefix is ours because noteit is not the source project.
 
 ### Known and accepted: HEAD-relative instability
 
@@ -63,7 +63,7 @@ Evaluated once per run, before verb dispatch, for every command including captur
 | `Err(NotARepo)` | path context — no upward walk |
 | unexpected error / panic | path context; print the error; never crash on capture |
 
-`repoid::project_id(dir) -> Result<RepoId, RepoIdError>` returns an **enum** error, deliberately diverging from lensr, which fails open to `None` (`repoid.rs:24`) and collapses every failure into one indistinguishable case. noteit cannot: `Shallow` warns and is recoverable via `git fetch --unshallow`, while `NoCommits` and `NotARepo` are silent normal states. Distinct behavior requires distinct variants.
+`repoid::project_id(dir) -> Result<RepoId, RepoIdError>` returns an **enum** error, deliberately diverging from the reference implementation, which fails open to `None` and collapses every failure into one indistinguishable case. noteit cannot: `Shallow` warns and is recoverable via `git fetch --unshallow`, while `NoCommits` and `NotARepo` are silent normal states. Distinct behavior requires distinct variants.
 
 ### Adoption
 
@@ -77,7 +77,7 @@ When a directory with path contexts at or under it gains a repo id, those contex
 - **Idempotent:** re-running after a crash is safe.
 - **Audited:** each fold writes an `adoptions` row (`from_context_id`, `to_context_id`, note ids, timestamp), enabling a future `adopt --undo`. Cheap now, impossible to reconstruct later.
 
-Live example: `D:\rust\noteit` is a git repo with zero commits, so noteit's own first notes exercise this path.
+Live example: `/repos/noteit` is a git repo with zero commits, so noteit's own first notes exercise this path.
 
 ## Schema
 
@@ -125,7 +125,7 @@ Index on `notes(context_id, subpath)`.
 
 ## Project display names
 
-lensr derives **no** project name — the scan confirmed no name derivation and no language detection anywhere. noteit must supply this itself, because the grouped `--global` view needs a heading and `urn:noteit:v1:a3f9c2…` is not one.
+The reference implementation derives **no** project name — the scan confirmed no name derivation and no language detection anywhere. noteit must supply this itself, because the grouped `--global` view needs a heading and `urn:noteit:v1:a3f9c2…` is not one.
 
 **Source: repo root directory basename, user-overridable** via `noteit project rename <name>`. The override is stored on the context row and always wins.
 
@@ -134,7 +134,7 @@ The name is **display-only**. It never keys anything, so a rename can never spli
 ### Rejected alternatives
 
 - **Remote URL last segment** — accurate when a remote exists, but many repos have none (this one has no commits, let alone a remote), so it needs the basename fallback anyway: two mechanisms for one job.
-- **Manifest `name` field** — would name this project **`app`**, since `D:\rust\noteit\Cargo.toml` declares `name = "app"` while the directory is `noteit`. Also forces a per-ecosystem parser and is ambiguous in monorepos.
+- **Manifest `name` field** — would name this project **`app`**, since `/repos/noteit/Cargo.toml` declares `name = "app"` while the directory is `noteit`. Also forces a per-ecosystem parser and is ambiguous in monorepos.
 
 Neither alternative can name a **path context** at all, since a non-repo directory has neither a remote nor necessarily a manifest.
 
@@ -160,7 +160,7 @@ noteit project rename <name>
 
 ## Module layout
 
-`lib.rs` + thin `main.rs` — **not** because noteit needs to be a library today, but because lensr's repo-id logic is good and unreusable purely because it is locked in a `[[bin]]` with no `lib.rs`. We are re-implementing it for exactly that reason.
+`lib.rs` + thin `main.rs` — **not** because noteit needs to be a library today, but because the reference implementation's repo-id logic is good and unreusable purely because it is locked in a `[[bin]]` with no `lib.rs`. We are re-implementing it for exactly that reason.
 
 | Module | Responsibility | Depends on |
 |---|---|---|
@@ -192,7 +192,7 @@ Effort follows risk: `repoid` and adoption can lose data; the rest is comparativ
 **`repoid`** — fixture repos built by real git operations in `tempfile` dirs. Each case maps to a specific scan claim, so a `gix`/git-C divergence surfaces as a test failure rather than missing notes:
 
 - Single-root repo → stable id; **id identical after cloning to a different path** (without this test, nothing verifies the core premise).
-- Multi-root (grafted) repo → smallest root, matching lensr's `strcmp` selection.
+- Multi-root (grafted) repo → smallest root, matching the reference implementation's `strcmp` selection.
 - Orphan branch → a **different** id, asserted deliberately, documenting known behavior so it is not "fixed" later.
 - `git init`, zero commits → `Err(NoCommits)` — not a panic, not `NotARepo`.
 - Shallow clone → `Err(Shallow)`.
