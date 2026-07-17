@@ -132,7 +132,16 @@ pub fn adopt_if_needed(
                 }
                 adoptable.push(c);
             }
-            Err(_) => adoptable.push(c), // not a repo at all
+            // NotARepo / Shallow / NoCommits / NoHead all genuinely mean "no
+            // different repo root was established here" -- adoptable.
+            Err(RepoIdError::NotARepo)
+            | Err(RepoIdError::Shallow)
+            | Err(RepoIdError::NoCommits)
+            | Err(RepoIdError::NoHead) => adoptable.push(c),
+            // A real git error, not a repo-shape answer -- be conservative
+            // and leave it for a later run rather than risk folding a
+            // nested repo's notes into the parent.
+            Err(RepoIdError::Other(_)) => continue,
         }
     }
     if adoptable.is_empty() {
@@ -141,9 +150,7 @@ pub fn adopt_if_needed(
 
     let paths_folded = adoptable.len();
     let notes_moved = store.adopt(&adoptable, resolved.context.id, &root)?;
-    if notes_moved == 0 {
-        return Ok(None);
-    }
+    // adoptable is non-empty here, so paths_folded > 0 -- always report.
 
     Ok(Some(AdoptionReport {
         notes_moved,

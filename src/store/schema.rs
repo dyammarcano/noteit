@@ -43,11 +43,15 @@ const MIGRATIONS: &[&str] = &[
     );
 
     CREATE TABLE adoptions (
-      id                INTEGER PRIMARY KEY,
-      from_context_id   INTEGER NOT NULL,
-      to_context_id     INTEGER NOT NULL,
-      note_ids          TEXT    NOT NULL,
-      adopted_at        INTEGER NOT NULL
+      id                    INTEGER PRIMARY KEY,
+      from_context_id       INTEGER NOT NULL,
+      to_context_id         INTEGER NOT NULL,
+      note_ids              TEXT    NOT NULL,
+      adopted_at            INTEGER NOT NULL,
+      from_key              TEXT    NOT NULL,
+      from_root_path        TEXT    NOT NULL,
+      from_display_name     TEXT    NOT NULL,
+      from_name_overridden  INTEGER NOT NULL DEFAULT 0
     );
 
     -- External-content FTS5: the index mirrors notes.body, kept current

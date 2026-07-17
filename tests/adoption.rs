@@ -72,6 +72,61 @@ fn adoption_writes_an_audit_row() {
 }
 
 #[test]
+fn adoption_audit_row_captures_the_folded_context_identity() {
+    let mut store = Store::open_in_memory().unwrap();
+    let dir = common::empty_repo();
+    let before = resolve(&store, dir.path()).unwrap();
+    store.add_note(before.context.id, ".", "idea").unwrap();
+    let from_key = before.context.key.clone();
+    let from_root_path = before.context.root_path.clone();
+    let from_display_name = before.context.display_name.clone();
+    common::commit_file(dir.path(), "a.txt", "a");
+
+    let r = resolve(&store, dir.path()).unwrap();
+    adopt_if_needed(&mut store, &r).unwrap().unwrap();
+
+    let (row_key, row_root, row_name): (String, String, String) = store
+        .conn()
+        .query_row(
+            "SELECT from_key, from_root_path, from_display_name FROM adoptions",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(row_key, from_key, "undo needs the original context key");
+    assert_eq!(row_root, from_root_path, "undo needs the original root path");
+    assert_eq!(row_name, from_display_name, "undo needs the original display name");
+}
+
+#[test]
+fn empty_path_context_fold_is_reported_and_audited() {
+    let mut store = Store::open_in_memory().unwrap();
+    let dir = common::empty_repo(); // zero commits -> path context
+    let sub = dir.path().join("empty");
+    std::fs::create_dir_all(&sub).unwrap();
+
+    // Resolve the subdir to create a path context, but add no notes to it.
+    let empty_ctx = resolve(&store, &sub).unwrap();
+    assert_eq!(empty_ctx.context.kind, Kind::Path);
+
+    // First commit -> the repo now has an id.
+    common::commit_file(dir.path(), "a.txt", "a");
+
+    let r = resolve(&store, dir.path()).unwrap();
+    assert_eq!(r.context.kind, Kind::Repo);
+    let report = adopt_if_needed(&mut store, &r).unwrap();
+    let report = report.expect("empty fold must still be reported");
+    assert!(report.paths_folded >= 1);
+    assert_eq!(report.notes_moved, 0);
+
+    let n: i64 = store
+        .conn()
+        .query_row("SELECT count(*) FROM adoptions", [], |r| r.get(0))
+        .unwrap();
+    assert!(n >= 1, "empty fold must still be audited");
+}
+
+#[test]
 fn a_repo_with_no_prior_path_notes_reports_no_adoption() {
     let mut store = Store::open_in_memory().unwrap();
     let dir = common::repo_with_commits(1);

@@ -180,12 +180,33 @@ impl Store {
             };
 
             if ids.is_empty() {
-                // Nothing to move, but the stale path context still goes.
+                // Nothing to move, but the stale path context still goes --
+                // and it still gets an audit row, so an empty fold is never
+                // silently destructive (undo needs its identity too).
+                tx.execute(
+                    "INSERT INTO adoptions
+                     (from_context_id, to_context_id, note_ids, adopted_at,
+                      from_key, from_root_path, from_display_name, from_name_overridden)
+                     VALUES (?1, ?2, '', ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        ctx.id,
+                        to_context_id,
+                        ts,
+                        ctx.key,
+                        ctx.root_path,
+                        ctx.display_name,
+                        ctx.name_overridden as i64,
+                    ],
+                )
+                .map_err(StoreError::Sqlite)?;
                 tx.execute("DELETE FROM contexts WHERE id = ?1", params![ctx.id])
                     .map_err(StoreError::Sqlite)?;
                 continue;
             }
 
+            // Invariant this UPDATE relies on: every note in a path context
+            // shares subpath "." (resolve() hardcodes it), so blanket-setting
+            // subpath here for all of the context's notes is safe.
             let n = tx
                 .execute(
                     "UPDATE notes SET context_id = ?1, subpath = ?2 WHERE context_id = ?3",
@@ -200,9 +221,20 @@ impl Store {
                 .collect::<Vec<_>>()
                 .join(",");
             tx.execute(
-                "INSERT INTO adoptions (from_context_id, to_context_id, note_ids, adopted_at)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![ctx.id, to_context_id, id_list, ts],
+                "INSERT INTO adoptions
+                 (from_context_id, to_context_id, note_ids, adopted_at,
+                  from_key, from_root_path, from_display_name, from_name_overridden)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    ctx.id,
+                    to_context_id,
+                    id_list,
+                    ts,
+                    ctx.key,
+                    ctx.root_path,
+                    ctx.display_name,
+                    ctx.name_overridden as i64,
+                ],
             )
             .map_err(StoreError::Sqlite)?;
 
