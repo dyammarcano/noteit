@@ -48,6 +48,27 @@ fn zero_commit_repo_resolves_to_a_path_context() {
 }
 
 #[test]
+fn shallow_clone_warns_only_once() {
+    let store = Store::open_in_memory().unwrap();
+    let origin = common::repo_with_commits(3);
+    let dest = tempfile::tempdir().unwrap();
+    let clone_path = dest.path().join("shallow");
+
+    // file:// forces a real transport, which `--depth` requires.
+    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    common::git(
+        dest.path(),
+        &["clone", "-q", "--depth", "1", &url, clone_path.to_str().unwrap()],
+    );
+
+    let first = resolve(&store, &clone_path).unwrap();
+    assert!(first.warning.is_some());
+
+    let second = resolve(&store, &clone_path).unwrap();
+    assert!(second.warning.is_none());
+}
+
+#[test]
 fn display_name_defaults_to_the_directory_basename() {
     let store = Store::open_in_memory().unwrap();
     let dir = common::plain_dir();

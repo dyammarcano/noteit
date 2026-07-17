@@ -105,6 +105,19 @@ impl Store {
         Ok(())
     }
 
+    /// Mark a context's shallow warning as delivered. Returns true if this
+    /// call was the one that flipped it (i.e. the caller should warn now).
+    pub fn claim_shallow_warning(&self, id: i64) -> Result<bool, StoreError> {
+        let n = self
+            .conn()
+            .execute(
+                "UPDATE contexts SET shallow_warned = 1 WHERE id = ?1 AND shallow_warned = 0",
+                params![id],
+            )
+            .map_err(StoreError::Sqlite)?;
+        Ok(n > 0)
+    }
+
     /// Path contexts at or under `root`. Used by adoption.
     pub fn path_contexts_under(&self, root: &str) -> Result<Vec<Context>, StoreError> {
         let sql = format!(

@@ -47,6 +47,7 @@ fn rel_subpath(root: &Path, cwd: &Path) -> String {
 pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
     let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
     let mut warning = None;
+    let mut shallow = false;
 
     match repoid::project_id(&cwd) {
         Ok(id) => {
@@ -63,10 +64,7 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
             return Ok(Resolved { context, subpath, warning });
         }
         Err(RepoIdError::Shallow) => {
-            warning = Some(
-                "shallow clone: notes bind to this path until you run `git fetch --unshallow`"
-                    .to_string(),
-            );
+            shallow = true;
         }
         Err(RepoIdError::NotARepo) | Err(RepoIdError::NoCommits) | Err(RepoIdError::NoHead) => {}
         Err(RepoIdError::Other(msg)) => {
@@ -78,5 +76,13 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
     let name = display_name_for(&cwd);
     let key = cwd.to_string_lossy().to_string();
     let context = store.upsert_context(Kind::Path, &key, &name, &key)?;
+
+    if shallow && store.claim_shallow_warning(context.id)? {
+        warning = Some(
+            "shallow clone: notes bind to this path until you run `git fetch --unshallow`"
+                .to_string(),
+        );
+    }
+
     Ok(Resolved { context, subpath: ".".to_string(), warning })
 }
