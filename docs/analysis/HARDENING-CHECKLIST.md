@@ -10,9 +10,9 @@ Ordered so the apply loop can always pick the highest-leverage unblocked,
 unchecked item next.
 
 ## Phase 1 — Stabilize
-- [ ] H-01 — Fix data-loss + symlink-race in `noteit new`'s $EDITOR temp-file handling (data-integrity/security, High, leverage 5) — blockedBy: [] — blocks: [H-02, H-13] — verify: `cargo test --lib cli:: -- --nocapture`
-- [ ] H-02 — Surface recovery path when editor temp file is not valid UTF-8 (error-handling, Medium, leverage 2) — blockedBy: [H-01] — blocks: [] — verify: `cargo test --lib cli::`
-- [ ] H-03 — Fix `list --global` sort order violating render_grouped's contiguity contract (robustness, Medium, leverage 2) — blockedBy: [] — blocks: [] — verify: `cargo test --lib render::`
+- [x] H-01 — Fix data-loss + symlink-race in `noteit new`'s $EDITOR temp-file handling (data-integrity/security, High, leverage 5) — blockedBy: [] — blocks: [H-02, H-13] — verify: `cargo test --lib cli:: -- --nocapture` — DONE d222b8c, verified (text-preserved test reads file off disk)
+- [x] H-02 — Surface recovery path when editor temp file is not valid UTF-8 (error-handling, Medium, leverage 2) — blockedBy: [H-01] — blocks: [] — verify: `cargo test --lib cli::` — DONE 5ae98a1, verified
+- [x] H-03 — Fix `list --global` sort order violating render_grouped's contiguity contract (robustness, Medium, leverage 2) — blockedBy: [] — blocks: [] — verify: `cargo test --lib render::` — DONE 947ccf0, verified (2-header test)
 
 ## Phase 2 — Harden
 - [ ] H-04 — Add CI workflow (build + test + clippy + fmt + coverage) (ci-dx, High, leverage 5) — blockedBy: [] — blocks: [H-05, H-06, H-10] — verify: `Test-Path D:\rust\noteit\.github\workflows\ci.yml`

@@ -80,9 +80,7 @@ fn editor_invalid_utf8_surfaces_the_path() {
     let script = if cfg!(windows) {
         let script = dir.path().join("fake_editor_bad_utf8.cmd");
         // %~1 gives the path without surrounding quotes.
-        let body = format!(
-            "@echo off\r\npowershell -NoProfile -Command \"[IO.File]::WriteAllBytes('%~1', [byte[]](0xFF,0xFE))\"\r\nexit /b 0\r\n"
-        );
+        let body = "@echo off\r\npowershell -NoProfile -Command \"[IO.File]::WriteAllBytes('%~1', [byte[]](0xFF,0xFE))\"\r\nexit /b 0\r\n".to_string();
         std::fs::write(&script, body).unwrap();
         script
     } else {

@@ -63,7 +63,12 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** [H-02, H-13]
 - **Target-stage impact:** Correctness & Robustness dimension B→A; closes the
   audit's single named "never lose a note" violation.
-- **Outcome:** _pending_
+- **Outcome:** DONE (d222b8c). Uses `tempfile::Builder...tempfile()?.into_temp_path()`
+  (releases the handle before the editor opens it — fixes a Windows sharing
+  violation); on non-zero exit with content, `.keep()`s the file and returns an
+  error naming the preserved path. Test `editor_nonzero_exit_preserves_typed_text`
+  parses the path from the error, asserts it exists on disk, and reads the typed
+  text back. Independent verify: PASS.
 
 ### H-02 Surface recovery path when editor temp file is not valid UTF-8
 - **Dimension:** error-handling   **Severity:** Medium   **Leverage:** 2
@@ -80,7 +85,9 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []  (pairs with H-01; ordered right after it)
 - **Target-stage impact:** Improves recoverability guarantee for the $EDITOR
   capture path; supports the same B→A move as H-01.
-- **Outcome:** _pending_
+- **Outcome:** DONE (5ae98a1). Non-UTF-8 read keeps the file and returns
+  "could not read note from <path> (invalid UTF-8): ...; the file was left in
+  place". Test `editor_invalid_utf8_surfaces_the_path`. Verify: PASS.
 
 ### H-03 Fix `list --global` sort order violating `render_grouped`'s contiguity contract
 - **Dimension:** robustness   **Severity:** Medium   **Leverage:** 2
@@ -100,7 +107,10 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Fixes a real render/grouping defect that could
   mislead users into thinking notes are missing or duplicated.
-- **Outcome:** _pending_
+- **Outcome:** DONE (947ccf0). Both `--global` grouped branches now sort
+  `(display_name, ctx.id, created_at desc)` so same-named/distinct contexts stay
+  contiguous. Test `render_grouped_keeps_same_named_contexts_separate` asserts
+  exactly two "app" header lines. Verify: PASS.
 
 ---
 
