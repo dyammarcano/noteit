@@ -358,6 +358,62 @@ fn set_status_invalid_id_exits_two() {
 }
 
 #[test]
+fn delete_success_exit_0() {
+    let repo = common::repo_with_commits(1);
+    let mut store = Store::open_in_memory().unwrap();
+    let ctx = noteit::context::resolve(&store, repo.path())
+        .unwrap()
+        .context;
+    let n = store.add_note(ctx.id, ".", "delete me please").unwrap();
+    let id = noteit::render::short_id(n.id);
+
+    let mut buf = Vec::new();
+    let code = run_core(Invocation::Delete { id }, &mut store, repo.path(), &mut buf).unwrap();
+    assert_eq!(code, 0);
+    let s = out_str(buf);
+    assert!(s.contains("deleted"), "unexpected output: {s}");
+
+    let notes = store.list_notes(ctx.id, None, true, None).unwrap();
+    assert!(notes.is_empty());
+}
+
+#[test]
+fn delete_not_found_exit_1() {
+    let repo = common::repo_with_commits(1);
+    let mut store = Store::open_in_memory().unwrap();
+
+    let mut buf = Vec::new();
+    let code = run_core(
+        Invocation::Delete {
+            id: "zz".to_string(),
+        },
+        &mut store,
+        repo.path(),
+        &mut buf,
+    )
+    .unwrap();
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn delete_invalid_id_exit_2() {
+    let repo = common::repo_with_commits(1);
+    let mut store = Store::open_in_memory().unwrap();
+
+    let mut buf = Vec::new();
+    let code = run_core(
+        Invocation::Delete {
+            id: "not-base36!".to_string(),
+        },
+        &mut store,
+        repo.path(),
+        &mut buf,
+    )
+    .unwrap();
+    assert_eq!(code, 2);
+}
+
+#[test]
 fn rename_updates_display_name() {
     let repo = common::repo_with_commits(1);
     let mut store = Store::open_in_memory().unwrap();

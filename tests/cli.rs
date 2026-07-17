@@ -146,6 +146,19 @@ fn help_flag_is_not_captured_as_a_note() {
 }
 
 #[test]
+fn delete_parses() {
+    match parse(&args(&["delete", "1a"])).unwrap() {
+        Invocation::Delete { id } => assert_eq!(id, "1a"),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn delete_without_id_is_an_error() {
+    assert!(parse(&args(&["delete"])).is_err());
+}
+
+#[test]
 fn version_flag_is_not_captured_as_a_note() {
     assert!(matches!(
         parse(&args(&["--version"])).unwrap(),

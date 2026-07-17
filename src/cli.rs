@@ -5,7 +5,7 @@ use crate::store::notes::Status;
 /// known at parse time, which is what makes the rule unambiguous despite
 /// looking magical. `add` is the escape hatch for colliding text.
 pub const VERBS: &[&str] = &[
-    "add", "list", "search", "new", "done", "open", "project", "adopt",
+    "add", "list", "search", "new", "done", "open", "project", "adopt", "delete",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +28,8 @@ pub enum CliError {
         "usage: noteit adopt --undo  (adoption is automatic; --undo reverses the most recent one)"
     )]
     AdoptNeedsUndo,
+    #[error("usage: noteit delete <id>")]
+    DeleteNeedsId,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -50,6 +52,7 @@ pub enum Invocation {
     Help,
     Version,
     Adopt { undo: bool },
+    Delete { id: String },
 }
 
 pub const HELP_TEXT: &str = "\
@@ -64,6 +67,7 @@ USAGE:
     noteit list                list notes            [--global] [--flat] [--tag <t>] [--all] [--limit <n>]
     noteit done <id>           mark a note done
     noteit open <id>           reopen a note
+    noteit delete <id>   delete a note permanently
     noteit project rename <n>  rename the current project
     noteit --help | --version
 
@@ -176,6 +180,10 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             } else {
                 Err(CliError::AdoptNeedsUndo)
             }
+        }
+        "delete" => {
+            let id = rest.first().ok_or(CliError::DeleteNeedsId)?;
+            Ok(Invocation::Delete { id: id.clone() })
         }
         _ => unreachable!("VERBS and match arms must stay in sync"),
     }
@@ -487,6 +495,29 @@ pub fn run_core(
         Invocation::Adopt { undo: false } => {
             eprintln!("{}", CliError::AdoptNeedsUndo);
             return Ok(2);
+        }
+        Invocation::Delete { id } => {
+            let Some(rowid) = render::parse_short_id(&id) else {
+                eprintln!("not a valid id: {id}");
+                return Ok(2);
+            };
+            match store.delete_note(rowid, ctx.id)? {
+                Some(body) => {
+                    let first_line = body.lines().next().unwrap_or("");
+                    let truncated = first_line.chars().count() > 60;
+                    let snippet: String = first_line.chars().take(60).collect();
+                    let snippet = if truncated {
+                        format!("{snippet}…")
+                    } else {
+                        snippet
+                    };
+                    writeln!(out, "deleted {id}: {snippet}")?;
+                }
+                None => {
+                    eprintln!("no note with id {id}");
+                    return Ok(1);
+                }
+            }
         }
         Invocation::Help | Invocation::Version => unreachable!("handled above"),
     }

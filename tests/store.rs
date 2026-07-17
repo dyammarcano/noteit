@@ -420,3 +420,81 @@ fn set_status_reports_whether_a_row_matched() {
     assert!(store.set_status(n.id, Status::Done).unwrap());
     assert!(!store.set_status(99999, Status::Done).unwrap());
 }
+
+#[test]
+fn delete_note_removes_a_note_and_returns_its_body() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let n = store.add_note(ctx, ".", "delete me").unwrap();
+
+    let body = store.delete_note(n.id, ctx).unwrap();
+    assert_eq!(body, Some("delete me".to_string()));
+
+    let notes = store.list_notes(ctx, None, true, None).unwrap();
+    assert!(notes.is_empty());
+
+    // Deleting again returns None -- already gone.
+    assert_eq!(store.delete_note(n.id, ctx).unwrap(), None);
+}
+
+#[test]
+fn delete_note_is_context_scoped() {
+    let store = Store::open_in_memory().unwrap();
+    let a = seed_ctx(&store);
+    let b = store
+        .upsert_context(
+            Kind::Repo,
+            "urn:noteit:v1:def",
+            "other",
+            "C:\\projects\\other",
+        )
+        .unwrap()
+        .id;
+    let n = store.add_note(b, ".", "belongs to b").unwrap();
+
+    // Attempting to delete via context A's scope must fail and leave it intact.
+    let result = store.delete_note(n.id, a).unwrap();
+    assert_eq!(result, None);
+
+    let notes = store.list_notes(b, None, true, None).unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].id, n.id);
+}
+
+#[test]
+fn delete_note_also_clears_tags_and_fts() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let n = store.add_note(ctx, ".", "fix the #fts5 tokenizer").unwrap();
+
+    // Sanity: tag + fts are populated before delete.
+    assert_eq!(
+        store
+            .notes_by_tag("fts5", Some(ctx), true, None)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(store.search("tokenizer", None, None).unwrap().len(), 1);
+
+    let body = store.delete_note(n.id, ctx).unwrap();
+    assert_eq!(body, Some("fix the #fts5 tokenizer".to_string()));
+
+    assert!(
+        store
+            .notes_by_tag("fts5", Some(ctx), true, None)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(store.search("tokenizer", None, None).unwrap().is_empty());
+
+    let remaining: i64 = store
+        .conn()
+        .query_row(
+            "SELECT count(*) FROM note_tags WHERE note_id = ?1",
+            [n.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(remaining, 0);
+}
