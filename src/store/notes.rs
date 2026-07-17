@@ -291,4 +291,21 @@ impl Store {
             .map_err(StoreError::Sqlite)?;
         Ok(n > 0)
     }
+
+    /// Hard-delete a note, scoped to `context_id`. Returns the deleted note's
+    /// body on success, `None` if no matching row existed (wrong id, wrong
+    /// context, or already deleted). `note_tags` rows cascade via the FK's
+    /// `ON DELETE CASCADE` and the FTS mirror row is removed by the
+    /// `notes_ad` AFTER DELETE trigger -- neither needs hand-cleanup here.
+    pub fn delete_note(&self, id: i64, context_id: i64) -> Result<Option<String>, StoreError> {
+        match self.conn().query_row(
+            "DELETE FROM notes WHERE id = ?1 AND context_id = ?2 RETURNING body",
+            params![id, context_id],
+            |r| r.get(0),
+        ) {
+            Ok(body) => Ok(Some(body)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StoreError::Sqlite(e)),
+        }
+    }
 }
