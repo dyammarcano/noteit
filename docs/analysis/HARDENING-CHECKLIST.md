@@ -15,13 +15,13 @@ unchecked item next.
 - [x] H-03 — Fix `list --global` sort order violating render_grouped's contiguity contract (robustness, Medium, leverage 2) — blockedBy: [] — blocks: [] — verify: `cargo test --lib render::` — DONE 947ccf0, verified (2-header test)
 
 ## Phase 2 — Harden
-- [x] H-04 — Add CI workflow (build + test + clippy + fmt + coverage) (ci-dx, High, leverage 5) — blockedBy: [] — blocks: [H-05, H-06, H-10] — verify: `Test-Path D:\rust\noteit\.github\workflows\ci.yml` — DONE c4b209e
+- [x] H-04 — Add CI workflow (build + test + clippy + fmt + coverage) (ci-dx, High, leverage 5) — blockedBy: [] — blocks: [H-05, H-06, H-10] — verify: `Test-Path .github\workflows\ci.yml` — DONE c4b209e
 - [x] H-06 — Add clippy-deny-warnings gate; fix 5 outstanding warning classes (lint, High, leverage 5) — blockedBy: [H-04] — blocks: [H-07, H-08, H-09] — verify: `cargo clippy --all-targets -- -D warnings` — DONE 7074aff
 - [x] H-05 — Run `cargo fmt` across the tree (formatting-only commit) (lint, Medium, leverage 2) — blockedBy: [H-04] — blocks: [] — verify: `cargo fmt --check` — DONE 42eb867
 - [x] H-10 — Install and wire cargo-audit into CI (ci-dx/security, Medium, leverage 3) — blockedBy: [H-04] — blocks: [] — verify: `cargo audit` — DONE c4b209e (installed + run locally, 0 advisories across 179 crates; wired into ci.yml, no separate commit needed)
 - [x] H-07 — Fix clippy::collapsible_if in src/cli.rs:248 (lint, Low, leverage 2) — blockedBy: [H-06] — blocks: [] — verify: `cargo clippy --all-targets` — DONE aefda69
 - [x] H-08 — Fix clippy::unnecessary_map_or in src/repoid.rs:77 (lint, Low, leverage 2) — blockedBy: [H-06] — blocks: [] — verify: `cargo clippy --all-targets` — DONE aefda69
-- [x] H-11 — Add rust-toolchain.toml pinning edition-2024 minimum toolchain (ci-dx, Low, leverage 2) — blockedBy: [] — blocks: [] — verify: `Test-Path D:\rust\noteit\rust-toolchain.toml` — DONE 7dee57c
+- [x] H-11 — Add rust-toolchain.toml pinning edition-2024 minimum toolchain (ci-dx, Low, leverage 2) — blockedBy: [] — blocks: [] — verify: `Test-Path rust-toolchain.toml` — DONE 7dee57c
 - [x] H-09 — Resolve tests/common/mod.rs dead-code warnings, 3 helpers merged (lint, Low, leverage 1) — blockedBy: [H-06] — blocks: [] — verify: `cargo clippy --all-targets` — DONE aefda69
 
 ## Phase 3 — Mature

@@ -39,9 +39,9 @@ pub enum RepoIdError {
     Other(String),
 }
 
-/// The URN namespace. The SHA payload matches lensr's algorithm exactly,
-/// but the namespace is ours -- noteit is not lensr. The SHA is the
-/// cross-tool join key if that is ever wanted.
+/// The URN namespace. The SHA payload matches the reference implementation's
+/// algorithm exactly, but the namespace is ours -- noteit uses its own
+/// namespace. The SHA is the cross-tool join key if that is ever wanted.
 const URN_PREFIX: &str = "urn:noteit:v1:";
 
 pub fn project_id(dir: &Path) -> Result<RepoId, RepoIdError> {
@@ -72,8 +72,8 @@ pub fn project_id(dir: &Path) -> Result<RepoId, RepoIdError> {
         let info = info.map_err(|e| RepoIdError::Other(e.to_string()))?;
         if info.parent_ids().next().is_none() {
             let hex = info.id().to_string();
-            // Lexicographically smallest wins, matching lensr's strcmp
-            // selection so multi-root repos agree across tools.
+            // Lexicographically smallest wins, matching the reference
+            // implementation's strcmp selection so multi-root repos agree across tools.
             if best.as_ref().is_none_or(|b| hex < *b) {
                 best = Some(hex);
             }

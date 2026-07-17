@@ -124,7 +124,7 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
   push/PR: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
   `cargo test --all-targets`, and optionally `cargo llvm-cov` for a coverage
   gate/badge.
-- **Verify:** `gh workflow list` (or) `Test-Path D:\rust\noteit\.github\workflows\ci.yml`
+- **Verify:** `gh workflow list` (or) `Test-Path .github\workflows\ci.yml`
 - **Blocks:** [] **Unblocks:** [H-05, H-06, H-10]
 - **Target-stage impact:** CI/CD & Release dimension F→C+ immediately; the
   single highest-leverage move in this runbook.
@@ -237,7 +237,7 @@ for H-06 (clippy-deny gate) and a natural home for H-10 (cargo-audit).
   nothing pins this for new contributors/CI.
 - **Fix approach:** Add `rust-toolchain.toml` pinning a minimum stable channel
   that supports edition 2024 and the let-chains feature used by H-07's fix.
-- **Verify:** `Test-Path D:\rust\noteit\rust-toolchain.toml`
+- **Verify:** `Test-Path rust-toolchain.toml`
 - **Blocks:** [] **Unblocks:** []
 - **Target-stage impact:** Minor DX friction removal.
 - **Outcome:** DONE 7dee57c — `rust-toolchain.toml` pinning channel "1.96.0"
