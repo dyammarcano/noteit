@@ -1,5 +1,5 @@
 # BACKLOG
-<!-- rev:003 -->
+<!-- rev:004 -->
 
 Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
@@ -21,6 +21,14 @@ blocks the current release; each item is tracked so it isn't lost.
   prints what was removed. Cleanup rides the `notes_ad` FTS trigger +
   `note_tags ON DELETE CASCADE`. The one authorized exception to
   "never lose a note".
+- **Shallow-clone self-adoption after `--unshallow`** — verified, no code
+  change needed. A shallow repo's own notes bind to a path context (keyed at
+  the repo dir itself). Once the user runs `git fetch --unshallow`, the next
+  in-dir run resolves to a Repo context, and `adopt_if_needed` correctly
+  folds that path context in: `path_contexts_under` matches on `key = root`
+  (not only descendants), and the submodule guard's canonicalized-root
+  comparison passes since `repo_root(dir) == dir` post-unshallow. Regression
+  test: `tests/adoption.rs::shallow_repo_self_adopts_after_unshallow`.
 
 ## Double-counted queries on `list` / `search` / `--tag`
 
@@ -37,12 +45,3 @@ expected note-table sizes, but worth collapsing into a single query (e.g.
 - Sync (multi-machine note synchronization).
 - Encryption of the SQLite database at rest.
 - Attachments (non-text note content).
-
-## Shallow-clone submodule adoption
-
-A shallow nested repo (submodule) is correctly *not* adopted — the submodule
-guard compares repo roots and skips it. But if the user later runs
-`git fetch --unshallow` on that submodule, making it a full, identifiable
-repo, its notes remain stuck in their original path context: there is no
-re-check that would fold them in at that point. Minor, since it only affects
-users who deliberately un-shallow a submodule after the fact.

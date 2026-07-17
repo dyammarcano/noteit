@@ -373,6 +373,85 @@ fn undo_pins_so_auto_adoption_does_not_re_fold() {
 }
 
 #[test]
+fn shallow_repo_self_adopts_after_unshallow() {
+    // Backlog claim: a shallow clone's own notes bind to a PATH context
+    // (project_id fails with Shallow). If the user later runs
+    // `git fetch --unshallow`, making it a full, identifiable repo, its
+    // notes should self-adopt on the next in-dir run -- there must be no
+    // re-check gap that leaves them stuck in the old path context.
+    let origin = common::repo_with_commits(2);
+    let clone_dir = tempfile::tempdir().unwrap();
+    let url = format!(
+        "file:///{}",
+        origin.path().to_str().unwrap().replace('\\', "/")
+    );
+    common::git(
+        clone_dir.path(),
+        &["clone", "-q", "--depth", "1", &url, "."],
+    );
+
+    // Prove the fixture is genuinely shallow before relying on it.
+    assert!(
+        clone_dir.path().join(".git").join("shallow").exists(),
+        "clone must have a .git/shallow file to be genuinely shallow"
+    );
+    let err = noteit::repoid::project_id(clone_dir.path()).unwrap_err();
+    assert!(
+        matches!(err, noteit::repoid::RepoIdError::Shallow),
+        "clone must be identified as Shallow, got {err:?}"
+    );
+
+    let mut store = Store::open_in_memory().unwrap();
+
+    // Capture a note while shallow -- binds to a PATH context.
+    let resolved_shallow = resolve(&store, clone_dir.path()).unwrap();
+    assert_eq!(resolved_shallow.context.kind, Kind::Path);
+    store
+        .add_note(resolved_shallow.context.id, ".", "note in shallow clone")
+        .unwrap();
+
+    // Un-shallow the clone against its origin.
+    common::git(clone_dir.path(), &["fetch", "--unshallow", "-q", &url]);
+    assert!(
+        noteit::repoid::project_id(clone_dir.path()).is_ok(),
+        "clone must be fully identifiable after --unshallow"
+    );
+
+    // Resolve again -- now a Repo context -- and run the same adoption pass
+    // that any in-dir command would trigger.
+    let resolved_repo = resolve(&store, clone_dir.path()).unwrap();
+    assert_eq!(resolved_repo.context.kind, Kind::Repo);
+    let report = adopt_if_needed(&mut store, &resolved_repo).unwrap();
+    let report = report.expect(
+        "the note captured while shallow must self-adopt into the repo \
+         context on the next in-dir run after `git fetch --unshallow`",
+    );
+    assert_eq!(report.notes_moved, 1);
+
+    let (repo_notes, _total) = store
+        .list_notes(resolved_repo.context.id, None, true, None)
+        .unwrap();
+    assert_eq!(
+        repo_notes.len(),
+        1,
+        "note must now live in the repo context"
+    );
+
+    // The old path context must be gone.
+    let clone_canon = clone_dir
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| clone_dir.path().to_path_buf());
+    let stale_path_ctx = store
+        .find_context(Kind::Path, &clone_canon.to_string_lossy())
+        .unwrap();
+    assert!(
+        stale_path_ctx.is_none(),
+        "the stale path context must be folded away, got {stale_path_ctx:?}"
+    );
+}
+
+#[test]
 fn undo_with_nothing_to_undo_returns_none() {
     let mut store = Store::open_in_memory().unwrap();
     let dir = common::repo_with_commits(1);
