@@ -265,8 +265,9 @@ fn add_note_keeps_tags_in_body_and_in_table() {
     // Body keeps the tag for display fidelity.
     assert!(n.body.contains("#fts5"));
     // Table drives queries.
-    let found = store.notes_by_tag("fts5", Some(ctx), true, None).unwrap();
+    let (found, total) = store.notes_by_tag("fts5", Some(ctx), true, None).unwrap();
     assert_eq!(found.len(), 1);
+    assert_eq!(total, 1);
     assert_eq!(found[0].1.id, n.id);
 }
 
@@ -278,12 +279,14 @@ fn notes_by_tag_hides_done_by_default() {
     let b = store.add_note(ctx, ".", "done one #bug").unwrap();
     store.set_status(b.id, Status::Done).unwrap();
 
-    let open_only = store.notes_by_tag("bug", Some(ctx), false, None).unwrap();
+    let (open_only, open_total) = store.notes_by_tag("bug", Some(ctx), false, None).unwrap();
     assert_eq!(open_only.len(), 1);
+    assert_eq!(open_total, 1);
     assert_eq!(open_only[0].1.id, a.id);
 
-    let all = store.notes_by_tag("bug", Some(ctx), true, None).unwrap();
+    let (all, total) = store.notes_by_tag("bug", Some(ctx), true, None).unwrap();
     assert_eq!(all.len(), 2);
+    assert_eq!(total, 2);
 }
 
 #[test]
@@ -293,10 +296,15 @@ fn notes_by_tag_respects_limit() {
     for _ in 0..5 {
         store.add_note(ctx, ".", "note #bug").unwrap();
     }
-    let limited = store.notes_by_tag("bug", Some(ctx), true, Some(2)).unwrap();
+    let (limited, limited_total) = store.notes_by_tag("bug", Some(ctx), true, Some(2)).unwrap();
     assert_eq!(limited.len(), 2);
-    let unlimited = store.notes_by_tag("bug", Some(ctx), true, None).unwrap();
+    assert_eq!(
+        limited_total, 5,
+        "total must reflect the full match count, not the limited page"
+    );
+    let (unlimited, unlimited_total) = store.notes_by_tag("bug", Some(ctx), true, None).unwrap();
     assert_eq!(unlimited.len(), 5);
+    assert_eq!(unlimited_total, 5);
 }
 
 #[test]
@@ -307,12 +315,14 @@ fn list_notes_hides_done_by_default() {
     let b = store.add_note(ctx, ".", "done one").unwrap();
     store.set_status(b.id, Status::Done).unwrap();
 
-    let open = store.list_notes(ctx, None, false, None).unwrap();
+    let (open, open_total) = store.list_notes(ctx, None, false, None).unwrap();
     assert_eq!(open.len(), 1);
+    assert_eq!(open_total, 1);
     assert_eq!(open[0].id, a.id);
 
-    let all = store.list_notes(ctx, None, true, None).unwrap();
+    let (all, total) = store.list_notes(ctx, None, true, None).unwrap();
     assert_eq!(all.len(), 2);
+    assert_eq!(total, 2);
 }
 
 #[test]
@@ -322,9 +332,22 @@ fn list_notes_filters_by_subpath() {
     store.add_note(ctx, ".", "at root").unwrap();
     store.add_note(ctx, "src", "in src").unwrap();
 
-    let in_src = store.list_notes(ctx, Some("src"), false, None).unwrap();
+    let (in_src, total) = store.list_notes(ctx, Some("src"), false, None).unwrap();
     assert_eq!(in_src.len(), 1);
+    assert_eq!(total, 1);
     assert_eq!(in_src[0].body, "in src");
+}
+
+#[test]
+fn list_notes_total_reflects_full_count_under_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    for _ in 0..5 {
+        store.add_note(ctx, ".", "note").unwrap();
+    }
+    let (rows, total) = store.list_notes(ctx, None, true, Some(2)).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(total, 5);
 }
 
 #[test]
@@ -343,9 +366,45 @@ fn search_finds_by_body_and_scopes_by_context() {
     store.add_note(a, ".", "tokenizer bug").unwrap();
     store.add_note(b, ".", "tokenizer elsewhere").unwrap();
 
-    assert_eq!(store.search("tokenizer", None, None).unwrap().len(), 2);
-    assert_eq!(store.search("tokenizer", Some(a), None).unwrap().len(), 1);
-    assert_eq!(store.search("nonexistent", None, None).unwrap().len(), 0);
+    assert_eq!(store.search("tokenizer", None, None).unwrap().0.len(), 2);
+    assert_eq!(store.search("tokenizer", Some(a), None).unwrap().0.len(), 1);
+    assert_eq!(store.search("nonexistent", None, None).unwrap().0.len(), 0);
+}
+
+#[test]
+fn search_total_reflects_full_count_under_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    for _ in 0..5 {
+        store.add_note(ctx, ".", "tokenizer bug").unwrap();
+    }
+    let (rows, total) = store.search("tokenizer", None, Some(2)).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(total, 5);
+}
+
+#[test]
+fn list_all_notes_total_reflects_full_count_under_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    for _ in 0..5 {
+        store.add_note(ctx, ".", "note").unwrap();
+    }
+    let (rows, total) = store.list_all_notes(true, Some(2)).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(total, 5);
+}
+
+#[test]
+fn notes_by_tag_total_reflects_full_count_under_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    for _ in 0..5 {
+        store.add_note(ctx, ".", "note #bug").unwrap();
+    }
+    let (rows, total) = store.notes_by_tag("bug", Some(ctx), true, Some(2)).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(total, 5);
 }
 
 #[test]
@@ -353,11 +412,11 @@ fn search_reflects_edits_via_fts_triggers() {
     let store = Store::open_in_memory().unwrap();
     let ctx = seed_ctx(&store);
     let n = store.add_note(ctx, ".", "findme").unwrap();
-    assert_eq!(store.search("findme", None, None).unwrap().len(), 1);
+    assert_eq!(store.search("findme", None, None).unwrap().0.len(), 1);
     // set_status touches the row; the AFTER UPDATE trigger must keep the
     // FTS index consistent rather than duplicating the entry.
     store.set_status(n.id, Status::Done).unwrap();
-    assert_eq!(store.search("findme", None, None).unwrap().len(), 1);
+    assert_eq!(store.search("findme", None, None).unwrap().0.len(), 1);
 }
 
 #[test]
@@ -379,7 +438,7 @@ fn search_with_bare_boolean_operator_is_literal() {
     let ctx = seed_ctx(&store);
     let n = store.add_note(ctx, ".", "salt AND pepper").unwrap();
 
-    let found = store.search("AND", None, None).unwrap();
+    let (found, _total) = store.search("AND", None, None).unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].1.id, n.id);
 }
@@ -391,7 +450,7 @@ fn search_multiple_words_requires_all_of_them() {
     let a = store.add_note(ctx, ".", "tokenizer bug here").unwrap();
     store.add_note(ctx, ".", "tokenizer only").unwrap();
 
-    let found = store.search("tokenizer bug", None, None).unwrap();
+    let (found, _total) = store.search("tokenizer bug", None, None).unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].1.id, a.id);
 }
@@ -401,8 +460,9 @@ fn search_empty_query_returns_no_results() {
     let store = Store::open_in_memory().unwrap();
     seed_ctx(&store);
 
-    let found = store.search("   ", None, None).unwrap();
+    let (found, total) = store.search("   ", None, None).unwrap();
     assert!(found.is_empty());
+    assert_eq!(total, 0);
 }
 
 #[test]
@@ -430,7 +490,7 @@ fn delete_note_removes_a_note_and_returns_its_body() {
     let body = store.delete_note(n.id, ctx).unwrap();
     assert_eq!(body, Some("delete me".to_string()));
 
-    let notes = store.list_notes(ctx, None, true, None).unwrap();
+    let (notes, _total) = store.list_notes(ctx, None, true, None).unwrap();
     assert!(notes.is_empty());
 
     // Deleting again returns None -- already gone.
@@ -456,7 +516,7 @@ fn delete_note_is_context_scoped() {
     let result = store.delete_note(n.id, a).unwrap();
     assert_eq!(result, None);
 
-    let notes = store.list_notes(b, None, true, None).unwrap();
+    let (notes, _total) = store.list_notes(b, None, true, None).unwrap();
     assert_eq!(notes.len(), 1);
     assert_eq!(notes[0].id, n.id);
 }
@@ -472,10 +532,11 @@ fn delete_note_also_clears_tags_and_fts() {
         store
             .notes_by_tag("fts5", Some(ctx), true, None)
             .unwrap()
+            .0
             .len(),
         1
     );
-    assert_eq!(store.search("tokenizer", None, None).unwrap().len(), 1);
+    assert_eq!(store.search("tokenizer", None, None).unwrap().0.len(), 1);
 
     let body = store.delete_note(n.id, ctx).unwrap();
     assert_eq!(body, Some("fix the #fts5 tokenizer".to_string()));
@@ -484,9 +545,10 @@ fn delete_note_also_clears_tags_and_fts() {
         store
             .notes_by_tag("fts5", Some(ctx), true, None)
             .unwrap()
+            .0
             .is_empty()
     );
-    assert!(store.search("tokenizer", None, None).unwrap().is_empty());
+    assert!(store.search("tokenizer", None, None).unwrap().0.is_empty());
 
     let remaining: i64 = store
         .conn()

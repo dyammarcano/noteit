@@ -148,8 +148,10 @@ impl Store {
         subpath: Option<&str>,
         include_done: bool,
         limit: Option<usize>,
-    ) -> Result<Vec<Note>, StoreError> {
-        let mut sql = format!("SELECT {NOTE_COLS} FROM notes n WHERE n.context_id = ?1");
+    ) -> Result<(Vec<Note>, usize), StoreError> {
+        let mut sql = format!(
+            "SELECT {NOTE_COLS}, COUNT(*) OVER() AS total FROM notes n WHERE n.context_id = ?1"
+        );
         if !include_done {
             sql.push_str(" AND n.status = 'open'");
         }
@@ -161,7 +163,8 @@ impl Store {
 
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql).map_err(StoreError::Sqlite)?;
-        let map = |r: &Row<'_>| row_to_note(r, 0);
+        let map =
+            |r: &Row<'_>| -> rusqlite::Result<(Note, i64)> { Ok((row_to_note(r, 0)?, r.get(7)?)) };
         let rows = match subpath {
             Some(sp) => stmt.query_map(params![context_id, sp], map),
             None => stmt.query_map(params![context_id], map),
@@ -169,19 +172,22 @@ impl Store {
         .map_err(StoreError::Sqlite)?;
 
         let mut out = Vec::new();
+        let mut total = 0usize;
         for r in rows {
-            out.push(r.map_err(StoreError::Sqlite)?);
+            let (note, t) = r.map_err(StoreError::Sqlite)?;
+            total = t as usize;
+            out.push(note);
         }
-        Ok(out)
+        Ok((out, total))
     }
 
     pub fn list_all_notes(
         &self,
         include_done: bool,
         limit: Option<usize>,
-    ) -> Result<Vec<(Context, Note)>, StoreError> {
+    ) -> Result<(Vec<(Context, Note)>, usize), StoreError> {
         let mut sql = format!(
-            "SELECT {CTX_COLS}, {NOTE_COLS} FROM notes n
+            "SELECT {CTX_COLS}, {NOTE_COLS}, COUNT(*) OVER() AS total FROM notes n
              JOIN contexts c ON c.id = n.context_id"
         );
         if !include_done {
@@ -193,13 +199,22 @@ impl Store {
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql).map_err(StoreError::Sqlite)?;
         let rows = stmt
-            .query_map([], |r| Ok((row_to_context(r, 0)?, row_to_note(r, 7)?)))
+            .query_map([], |r| {
+                Ok((
+                    row_to_context(r, 0)?,
+                    row_to_note(r, 7)?,
+                    r.get::<_, i64>(14)?,
+                ))
+            })
             .map_err(StoreError::Sqlite)?;
         let mut out = Vec::new();
+        let mut total = 0usize;
         for r in rows {
-            out.push(r.map_err(StoreError::Sqlite)?);
+            let (ctx, note, t) = r.map_err(StoreError::Sqlite)?;
+            total = t as usize;
+            out.push((ctx, note));
         }
-        Ok(out)
+        Ok((out, total))
     }
 
     pub fn search(
@@ -207,14 +222,14 @@ impl Store {
         query: &str,
         context_id: Option<i64>,
         limit: Option<usize>,
-    ) -> Result<Vec<(Context, Note)>, StoreError> {
+    ) -> Result<(Vec<(Context, Note)>, usize), StoreError> {
         let match_query = sanitize_fts_query(query);
         if match_query.is_empty() {
-            return Ok(vec![]);
+            return Ok((vec![], 0));
         }
 
         let mut sql = format!(
-            "SELECT {CTX_COLS}, {NOTE_COLS} FROM notes_fts f
+            "SELECT {CTX_COLS}, {NOTE_COLS}, COUNT(*) OVER() AS total FROM notes_fts f
              JOIN notes n    ON n.id = f.rowid
              JOIN contexts c ON c.id = n.context_id
              WHERE notes_fts MATCH ?1"
@@ -227,7 +242,13 @@ impl Store {
 
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql).map_err(StoreError::Sqlite)?;
-        let map = |r: &Row<'_>| Ok((row_to_context(r, 0)?, row_to_note(r, 7)?));
+        let map = |r: &Row<'_>| {
+            Ok((
+                row_to_context(r, 0)?,
+                row_to_note(r, 7)?,
+                r.get::<_, i64>(14)?,
+            ))
+        };
         let rows = match context_id {
             Some(id) => stmt.query_map(params![match_query, id], map),
             None => stmt.query_map(params![match_query], map),
@@ -235,10 +256,13 @@ impl Store {
         .map_err(StoreError::Sqlite)?;
 
         let mut out = Vec::new();
+        let mut total = 0usize;
         for r in rows {
-            out.push(r.map_err(StoreError::Sqlite)?);
+            let (ctx, note, t) = r.map_err(StoreError::Sqlite)?;
+            total = t as usize;
+            out.push((ctx, note));
         }
-        Ok(out)
+        Ok((out, total))
     }
 
     pub fn notes_by_tag(
@@ -247,9 +271,9 @@ impl Store {
         context_id: Option<i64>,
         include_done: bool,
         limit: Option<usize>,
-    ) -> Result<Vec<(Context, Note)>, StoreError> {
+    ) -> Result<(Vec<(Context, Note)>, usize), StoreError> {
         let mut sql = format!(
-            "SELECT {CTX_COLS}, {NOTE_COLS} FROM notes n
+            "SELECT {CTX_COLS}, {NOTE_COLS}, COUNT(*) OVER() AS total FROM notes n
              JOIN contexts c  ON c.id = n.context_id
              JOIN note_tags nt ON nt.note_id = n.id
              JOIN tags t       ON t.id = nt.tag_id
@@ -266,7 +290,13 @@ impl Store {
 
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql).map_err(StoreError::Sqlite)?;
-        let map = |r: &Row<'_>| Ok((row_to_context(r, 0)?, row_to_note(r, 7)?));
+        let map = |r: &Row<'_>| {
+            Ok((
+                row_to_context(r, 0)?,
+                row_to_note(r, 7)?,
+                r.get::<_, i64>(14)?,
+            ))
+        };
         let lower = tag.to_lowercase();
         let rows = match context_id {
             Some(id) => stmt.query_map(params![lower, id], map),
@@ -275,10 +305,13 @@ impl Store {
         .map_err(StoreError::Sqlite)?;
 
         let mut out = Vec::new();
+        let mut total = 0usize;
         for r in rows {
-            out.push(r.map_err(StoreError::Sqlite)?);
+            let (ctx, note, t) = r.map_err(StoreError::Sqlite)?;
+            total = t as usize;
+            out.push((ctx, note));
         }
-        Ok(out)
+        Ok((out, total))
     }
 
     pub fn set_status(&self, id: i64, status: Status) -> Result<bool, StoreError> {

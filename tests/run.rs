@@ -25,7 +25,7 @@ fn capture_saves_a_note_and_exits_zero() {
     let s = out_str(buf);
     assert!(s.contains("saved"), "unexpected output: {s}");
 
-    let notes = store.list_notes(1, None, true, None).unwrap();
+    let (notes, _total) = store.list_notes(1, None, true, None).unwrap();
     assert_eq!(notes.len(), 1);
     assert_eq!(notes[0].body, "fix the tokenizer");
 }
@@ -41,7 +41,7 @@ fn empty_capture_saves_nothing_and_exits_two() {
 
     assert_eq!(code, 2);
     assert!(out_str(buf).is_empty());
-    let notes = store.list_all_notes(true, None).unwrap();
+    let (notes, _total) = store.list_all_notes(true, None).unwrap();
     assert!(notes.is_empty());
 }
 
@@ -373,7 +373,7 @@ fn delete_success_exit_0() {
     let s = out_str(buf);
     assert!(s.contains("deleted"), "unexpected output: {s}");
 
-    let notes = store.list_notes(ctx.id, None, true, None).unwrap();
+    let (notes, _total) = store.list_notes(ctx.id, None, true, None).unwrap();
     assert!(notes.is_empty());
 }
 
