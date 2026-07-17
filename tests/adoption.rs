@@ -30,7 +30,7 @@ fn path_notes_fold_into_the_repo_context_preserving_subpaths() {
     assert_eq!(report.paths_folded, 2);
 
     // Both notes now live in the repo context, with correct subpaths.
-    let all = store.list_notes(r.context.id, None, true, None).unwrap();
+    let (all, _total) = store.list_notes(r.context.id, None, true, None).unwrap();
     assert_eq!(all.len(), 2);
     let mut subpaths: Vec<&str> = all.iter().map(|n| n.subpath.as_str()).collect();
     subpaths.sort_unstable();
@@ -56,6 +56,7 @@ fn adoption_is_idempotent() {
         store
             .list_notes(r.context.id, None, true, None)
             .unwrap()
+            .0
             .len(),
         1
     );
@@ -278,7 +279,7 @@ fn shallow_nested_repo_is_not_adopted() {
         .find_context(Kind::Path, &vendor_key)
         .unwrap()
         .expect("vendor path context must still exist");
-    let vendor_notes = store.list_notes(vendor_ctx.id, None, true, None).unwrap();
+    let (vendor_notes, _total) = store.list_notes(vendor_ctx.id, None, true, None).unwrap();
     assert_eq!(
         vendor_notes.len(),
         1,
@@ -286,7 +287,7 @@ fn shallow_nested_repo_is_not_adopted() {
     );
 
     // The parent repo context must NOT contain the vendor note.
-    let parent_notes = store
+    let (parent_notes, _total) = store
         .list_notes(parent_resolved.context.id, None, true, None)
         .unwrap();
     assert!(
@@ -318,7 +319,7 @@ fn undo_restores_notes_to_a_path_context() {
     assert_eq!(undo.notes_restored, 1);
 
     // Repo context no longer holds the note.
-    let repo_notes = store.list_notes(r.context.id, None, true, None).unwrap();
+    let (repo_notes, _total) = store.list_notes(r.context.id, None, true, None).unwrap();
     assert!(
         repo_notes.is_empty(),
         "note must be moved out of the repo context"
@@ -330,7 +331,7 @@ fn undo_restores_notes_to_a_path_context() {
         .find_context(Kind::Path, &src_canon.to_string_lossy())
         .unwrap()
         .expect("restored path context must exist");
-    let restored_notes = store.list_notes(restored_ctx.id, None, true, None).unwrap();
+    let (restored_notes, _total) = store.list_notes(restored_ctx.id, None, true, None).unwrap();
     assert_eq!(restored_notes.len(), 1);
     assert_eq!(restored_notes[0].subpath, ".");
 

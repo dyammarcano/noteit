@@ -384,8 +384,7 @@ pub fn run_core(
             let limit = effective_limit(a.limit);
             if let Some(tag) = a.tag {
                 let scope = if a.global { None } else { Some(ctx.id) };
-                let all = store.notes_by_tag(&tag, scope, a.all, None)?;
-                let total = all.len();
+                let (all, total) = store.notes_by_tag(&tag, scope, a.all, None)?;
                 let mut rows = all;
                 // render_grouped requires rows sorted by context -- unsorted
                 // input repeats a project's header. Sort before truncating so
@@ -418,8 +417,7 @@ pub fn run_core(
                     writeln!(out, "{}", render::render_list(&notes, limit, total))?;
                 }
             } else if a.global {
-                let all = store.list_all_notes(a.all, None)?;
-                let total = all.len();
+                let (all, total) = store.list_all_notes(a.all, None)?;
                 let mut rows = all;
                 if !a.flat {
                     // See the tag-grouped branch above: ctx.id must sit before
@@ -442,16 +440,14 @@ pub fn run_core(
                 };
                 writeln!(out, "{s}")?;
             } else {
-                let total = store.list_notes(ctx.id, None, a.all, None)?.len();
-                let notes = store.list_notes(ctx.id, None, a.all, limit)?;
+                let (notes, total) = store.list_notes(ctx.id, None, a.all, limit)?;
                 writeln!(out, "{}", render::render_list(&notes, limit, total))?;
             }
         }
         Invocation::Search { query, global } => {
             let scope = if global { None } else { Some(ctx.id) };
             let limit = effective_limit(None);
-            let total = store.search(&query, scope, None)?.len();
-            let rows = store.search(&query, scope, limit)?;
+            let (rows, total) = store.search(&query, scope, limit)?;
             writeln!(out, "{}", render::render_flat(&rows, total, limit))?;
         }
         Invocation::SetStatus { id, status } => {
