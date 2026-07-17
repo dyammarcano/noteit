@@ -1,5 +1,5 @@
 # Hardening Checklist — noteit
-<!-- rev:002 -->
+<!-- rev:003 -->
 
 Baseline→Target by dimension: Testing & Coverage C→A (weight 5), CI/CD & Release
 F→C+, Code Quality C→B, Security C→B, Correctness & Robustness B→A, Documentation
@@ -25,9 +25,9 @@ unchecked item next.
 - [x] H-09 — Resolve tests/common/mod.rs dead-code warnings, 3 helpers merged (lint, Low, leverage 1) — blockedBy: [H-06] — blocks: [] — verify: `cargo clippy --all-targets` — DONE aefda69
 
 ## Phase 3 — Mature
-- [ ] H-12 — Add integration coverage for cli::run() dispatch entrypoint (test-coverage, High, leverage 5) — blockedBy: [] — blocks: [H-13] — verify: `cargo llvm-cov --summary-only`
-- [ ] H-13 — Add coverage for edit_in_editor() ($EDITOR/$VISUAL path) (test-coverage, Medium, leverage 3) — blockedBy: [H-01, H-12] — blocks: [] — verify: `cargo llvm-cov --summary-only`
-- [ ] H-14 — Add coverage for the 2 untested render.rs functions (test-coverage, Low, leverage 2) — blockedBy: [] — blocks: [] — verify: `cargo llvm-cov --summary-only`
-- [ ] H-16 — Rename misleading test new_opens_the_editor (test-quality, Low, leverage 1) — blockedBy: [H-13] — blocks: [] — verify: `grep -n 'fn new_opens_the_editor' tests/cli.rs`
-- [ ] H-15 — Add a thin assert_cmd test for main.rs (test-coverage, Low, leverage 1) — blockedBy: [] — blocks: [] — verify: `cargo llvm-cov --summary-only`
-- [ ] H-17 — Document run()'s exit-code contract (0/1/2) (docs, Low, leverage 1) — blockedBy: [] — blocks: [] — verify: `cargo doc --no-deps`
+- [x] H-12 — Add integration coverage for cli::run() dispatch entrypoint (test-coverage, High, leverage 5) — blockedBy: [] — blocks: [H-13] — verify: `cargo llvm-cov --summary-only` — DONE 9352749 (extracted `run_core`, 16 new tests in tests/run.rs; llvm-cov measurement deferred, see runbook)
+- [x] H-13 — Add coverage for edit_in_editor() ($EDITOR/$VISUAL path) (test-coverage, Medium, leverage 3) — blockedBy: [H-01, H-12] — blocks: [] — verify: `cargo llvm-cov --summary-only` — DONE 696056a (happy-path + spawn-failure tests added to tests/editor.rs)
+- [x] H-14 — Add coverage for the 2 untested render.rs functions (test-coverage, Low, leverage 2) — blockedBy: [] — blocks: [] — verify: `cargo llvm-cov --summary-only` — DONE d55a4a2 (render_flat + render_grouped empty-case tests added)
+- [x] H-16 — Rename misleading test new_opens_the_editor (test-quality, Low, leverage 1) — blockedBy: [H-13] — blocks: [] — verify: `grep -n 'fn new_opens_the_editor' tests/cli.rs` — DONE 02bf92c (renamed to new_parses_as_the_new_invocation)
+- [x] H-15 — Add a thin assert_cmd test for main.rs (test-coverage, Low, leverage 1) — blockedBy: [] — blocks: [] — verify: `cargo llvm-cov --summary-only` — DONE 9a9bf27 (tests/main_smoke.rs via assert_cmd + predicates)
+- [x] H-17 — Document run()'s exit-code contract (0/1/2) (docs, Low, leverage 1) — blockedBy: [] — blocks: [] — verify: `cargo doc --no-deps` — DONE (landed in 9352749 alongside the run_core extraction; `pub fn run` now carries a `/// # Exit codes` doc comment)
