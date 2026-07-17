@@ -1,4 +1,4 @@
-use noteit::cli::{parse, Invocation};
+use noteit::cli::{parse, Invocation, VERBS};
 use noteit::store::notes::Status;
 
 fn args(v: &[&str]) -> Vec<String> {
@@ -47,12 +47,32 @@ fn add_is_the_escape_hatch_for_verb_colliding_text() {
 }
 
 #[test]
-fn text_merely_starting_with_a_verb_word_is_still_captured() {
-    // "search this" -- first token is a verb, so per the rule it dispatches.
-    // Documenting the sharp edge: users needing literal text use `add`.
-    match parse(&args(&["add", "search this"])).unwrap() {
-        Invocation::Capture(body) => assert_eq!(body, "search this"),
+fn bare_text_starting_with_a_verb_dispatches_the_verb_not_capture() {
+    // This is the documented cost of the ambiguity rule: bare `noteit search
+    // this` (no `add`) dispatches the search verb with query "this" -- it does
+    // NOT capture a note reading "search this". Users who want that literal
+    // text captured must use the escape hatch: `noteit add "search this"`.
+    // Do not "fix" this thinking it's a bug -- it's the deliberate design.
+    match parse(&args(&["search", "this"])).unwrap() {
+        Invocation::Search { query, global } => {
+            assert_eq!(query, "this");
+            assert!(!global);
+        }
         other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn list_tag_without_a_value_is_an_error() {
+    assert!(parse(&args(&["list", "--tag"])).is_err());
+}
+
+#[test]
+fn every_verb_in_verbs_has_a_match_arm() {
+    // Guards against VERBS drifting out of sync with the match arms in
+    // `parse`, which would otherwise turn `unreachable!()` into a live panic.
+    for verb in VERBS {
+        let _ = parse(&args(&[verb, "x"]));
     }
 }
 

@@ -18,6 +18,8 @@ pub enum CliError {
     BadProject,
     #[error("--limit needs a number")]
     BadLimit,
+    #[error("usage: noteit list --tag <name>")]
+    TagNeedsValue,
     #[error("unknown flag: {0}")]
     UnknownFlag(String),
 }
@@ -51,7 +53,7 @@ fn parse_list_args(rest: &[String]) -> Result<ListArgs, CliError> {
             "--all" => a.all = true,
             "--tag" => {
                 i += 1;
-                a.tag = rest.get(i).cloned();
+                a.tag = Some(rest.get(i).cloned().ok_or(CliError::TagNeedsValue)?);
             }
             "--limit" => {
                 i += 1;
@@ -85,6 +87,9 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
         "list" => Ok(Invocation::List(parse_list_args(rest)?)),
         "new" => Ok(Invocation::New),
         "search" => {
+            // Note: this filters every --global/-g token out of the query, so a
+            // literal search for the string "--global" is not possible in v1 --
+            // the flag always wins.
             let global = rest.iter().any(|a| a == "--global" || a == "-g");
             let query: Vec<&str> = rest
                 .iter()
