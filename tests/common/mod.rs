@@ -27,6 +27,7 @@ pub fn plain_dir() -> TempDir {
 pub fn empty_repo() -> TempDir {
     let td = tempfile::tempdir().expect("tempdir");
     git(td.path(), &["init", "-q"]);
+    git(td.path(), &["symbolic-ref", "HEAD", "refs/heads/master"]);
     git(td.path(), &["config", "user.name", "Test"]);
     git(td.path(), &["config", "user.email", "test@example.com"]);
     td
