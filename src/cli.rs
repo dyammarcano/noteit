@@ -367,11 +367,19 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
         Invocation::Adopt { undo: true } => {
             match store.undo_last_adoption(ctx.id)? {
                 Some(report) => {
-                    writeln!(
-                        out,
-                        "un-adopted {} notes to {} paths",
-                        report.notes_restored, report.paths_restored
-                    )?;
+                    if report.notes_restored > 0 {
+                        writeln!(
+                            out,
+                            "un-adopted {} notes to {} paths — now path-bound, view with: noteit list --global",
+                            report.notes_restored, report.paths_restored
+                        )?;
+                    } else {
+                        writeln!(
+                            out,
+                            "un-adopted {} notes to {} paths",
+                            report.notes_restored, report.paths_restored
+                        )?;
+                    }
                 }
                 None => {
                     writeln!(out, "nothing to undo")?;

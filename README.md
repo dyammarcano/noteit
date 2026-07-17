@@ -1,5 +1,5 @@
 # noteit
-<!-- rev:002 -->
+<!-- rev:003 -->
 
 `noteit` is a command-line tool for capturing small ideas and notes that bind
 themselves to the git repository (or plain directory) you were in when you
@@ -164,6 +164,9 @@ If a fold wasn't what you wanted, `noteit adopt --undo` reverses the most
 recent adoption for the current repo: it restores the path context(s), moves
 the notes back, and *pins* those contexts so automatic adoption won't simply
 re-fold them on the next run. Run it again and it reports `nothing to undo`.
+Because the restored notes are now path-bound and the directory is still a
+git repo, they won't show up in the plain in-repo listing — view them with
+`noteit list --global`.
 
 ## Storage
 
