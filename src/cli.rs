@@ -41,7 +41,33 @@ pub enum Invocation {
     New,
     SetStatus { id: String, status: Status },
     Rename(String),
+    Help,
+    Version,
 }
+
+pub const HELP_TEXT: &str = "\
+noteit — notes bound to the directory you're in
+
+USAGE:
+    noteit <text>              capture a note in the current context
+    noteit                     list notes for the current context
+    noteit add <text>          capture text that collides with a verb
+    noteit new                 capture a longer note in $EDITOR
+    noteit search <query>      full-text search      [--global]
+    noteit list                list notes            [--global] [--flat] [--tag <t>] [--all] [--limit <n>]
+    noteit done <id>           mark a note done
+    noteit open <id>           reopen a note
+    noteit project rename <n>  rename the current project
+    noteit --help | --version
+
+NOTES:
+    A first argument matching a known verb runs that verb; anything else is
+    note text. `noteit search this` searches — use `noteit add \"search this\"`
+    to capture that text instead.
+
+    Notes bind to a repo's identity (derived from its first commit), so they
+    follow the repo across clones and renames. Outside a repo, notes bind to
+    the directory path, and are adopted into the repo if one appears later.";
 
 fn parse_list_args(rest: &[String]) -> Result<ListArgs, CliError> {
     let mut a = ListArgs::default();
@@ -71,6 +97,15 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
     let Some(first) = args.first() else {
         return Ok(Invocation::List(ListArgs::default()));
     };
+
+    // --help/--version must never be captured as note text, so they are
+    // checked before the VERBS ambiguity rule kicks in.
+    match first.as_str() {
+        "--help" | "-h" => return Ok(Invocation::Help),
+        "--version" | "-V" => return Ok(Invocation::Version),
+        _ => {}
+    }
+
     let rest = &args[1..];
 
     if !VERBS.contains(&first.as_str()) {
@@ -116,4 +151,166 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
         }
         _ => unreachable!("VERBS and match arms must stay in sync"),
     }
+}
+
+use std::io::Write;
+
+use crate::context::{adopt_if_needed, resolve};
+use crate::render;
+use crate::store::{default_db_path, Store};
+
+const DEFAULT_LIMIT: usize = 50;
+
+fn effective_limit(requested: Option<usize>) -> Option<usize> {
+    match requested {
+        Some(0) => None,        // --limit 0 means everything
+        Some(n) => Some(n),
+        None => Some(DEFAULT_LIMIT),
+    }
+}
+
+/// Open a note body in $EDITOR (or $VISUAL) via a temp file.
+fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
+    let editor = std::env::var("VISUAL")
+        .or_else(|_| std::env::var("EDITOR"))
+        .unwrap_or_else(|_| {
+            if cfg!(windows) { "notepad".to_string() } else { "vi".to_string() }
+        });
+    let dir = std::env::temp_dir();
+    let path = dir.join(format!("noteit-{}.md", std::process::id()));
+    std::fs::write(&path, "")?;
+
+    let status = std::process::Command::new(&editor).arg(&path).status()?;
+    if !status.success() {
+        return Err(format!("{editor} exited with {status}").into());
+    }
+    let body = std::fs::read_to_string(&path)?;
+    let _ = std::fs::remove_file(&path);
+    Ok(body.trim().to_string())
+}
+
+pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
+    let inv = match parse(args) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("{e}");
+            return Ok(2);
+        }
+    };
+
+    // --help/--version must work even if the DB is corrupt, so handle them
+    // before opening the database.
+    match inv {
+        Invocation::Help => {
+            println!("{HELP_TEXT}");
+            return Ok(0);
+        }
+        Invocation::Version => {
+            println!("noteit {}", env!("CARGO_PKG_VERSION"));
+            return Ok(0);
+        }
+        _ => {}
+    }
+
+    // A corrupt DB or failed migration is a HARD failure: do not create a
+    // second DB, do not skip the migration.
+    let db = default_db_path()?;
+    let mut store = Store::open(&db)?;
+
+    let cwd = std::env::current_dir()?;
+    let resolved = resolve(&store, &cwd)?;
+    if let Some(w) = &resolved.warning {
+        eprintln!("warning: {w}");
+    }
+
+    // Adoption is automatic but ANNOUNCED -- it moves data between scopes,
+    // so a wrong fold must never be invisible.
+    if let Some(r) = adopt_if_needed(&mut store, &resolved)? {
+        eprintln!(
+            "adopted {} notes from {} paths into {}",
+            r.notes_moved, r.paths_folded, r.project
+        );
+    }
+    // Re-resolve: adoption may have replaced the context.
+    let resolved = resolve(&store, &cwd)?;
+    let ctx = &resolved.context;
+
+    let mut out = std::io::stdout().lock();
+    match inv {
+        Invocation::Capture(body) => {
+            if body.trim().is_empty() {
+                eprintln!("empty note, nothing saved");
+                return Ok(2);
+            }
+            let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
+            writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
+        }
+        Invocation::New => {
+            let body = edit_in_editor()?;
+            if body.is_empty() {
+                eprintln!("empty note, nothing saved");
+                return Ok(0);
+            }
+            let n = store.add_note(ctx.id, &resolved.subpath, &body)?;
+            writeln!(out, "saved {} to {}", render::short_id(n.id), ctx.display_name)?;
+        }
+        Invocation::List(a) => {
+            let limit = effective_limit(a.limit);
+            if a.global {
+                let all = store.list_all_notes(a.all, None)?;
+                let total = all.len();
+                let mut rows = all;
+                if !a.flat {
+                    rows.sort_by(|x, y| {
+                        x.0.display_name
+                            .cmp(&y.0.display_name)
+                            .then(y.1.created_at.cmp(&x.1.created_at))
+                    });
+                }
+                if let Some(n) = limit {
+                    rows.truncate(n);
+                }
+                let s = if a.flat {
+                    render::render_flat(&rows, total, limit)
+                } else {
+                    render::render_grouped(&rows, total, limit)
+                };
+                writeln!(out, "{s}")?;
+            } else if let Some(tag) = a.tag {
+                let rows = store.notes_by_tag(&tag, Some(ctx.id))?;
+                let total = rows.len();
+                let notes: Vec<_> = rows.into_iter().map(|(_, n)| n).collect();
+                writeln!(out, "{}", render::render_list(&notes, limit, total))?;
+            } else {
+                let total = store.list_notes(ctx.id, None, a.all, None)?.len();
+                let notes = store.list_notes(ctx.id, None, a.all, limit)?;
+                writeln!(out, "{}", render::render_list(&notes, limit, total))?;
+            }
+        }
+        Invocation::Search { query, global } => {
+            let scope = if global { None } else { Some(ctx.id) };
+            let limit = effective_limit(None);
+            let total = store.search(&query, scope, None)?.len();
+            let rows = store.search(&query, scope, limit)?;
+            writeln!(out, "{}", render::render_flat(&rows, total, limit))?;
+        }
+        Invocation::SetStatus { id, status } => {
+            let Some(rowid) = render::parse_short_id(&id) else {
+                eprintln!("not a valid id: {id}");
+                return Ok(2);
+            };
+            if store.set_status(rowid, status)? {
+                writeln!(out, "{id} -> {}", status.as_str())?;
+            } else {
+                eprintln!("no note with id {id}");
+                return Ok(1);
+            }
+        }
+        Invocation::Rename(name) => {
+            store.rename_context(ctx.id, &name)?;
+            writeln!(out, "renamed to {name}")?;
+        }
+        Invocation::Help | Invocation::Version => unreachable!("handled above"),
+    }
+    Ok(0)
 }

@@ -114,3 +114,19 @@ fn project_rename_parses() {
 fn new_opens_the_editor() {
     assert!(matches!(parse(&args(&["new"])).unwrap(), Invocation::New));
 }
+
+#[test]
+fn help_flag_is_not_captured_as_a_note() {
+    // Regression guard: dropping clap removed help generation, and under the
+    // ambiguity rule an unknown first argument is note text. Without this
+    // explicit check, `noteit --help` would save a note whose body is
+    // literally "--help".
+    assert!(matches!(parse(&args(&["--help"])).unwrap(), Invocation::Help));
+    assert!(matches!(parse(&args(&["-h"])).unwrap(), Invocation::Help));
+}
+
+#[test]
+fn version_flag_is_not_captured_as_a_note() {
+    assert!(matches!(parse(&args(&["--version"])).unwrap(), Invocation::Version));
+    assert!(matches!(parse(&args(&["-V"])).unwrap(), Invocation::Version));
+}
