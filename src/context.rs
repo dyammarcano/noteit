@@ -17,6 +17,14 @@ pub struct Resolved {
     pub context: Context,
     /// Path of `cwd` relative to `context.root_path`; "." at the root.
     pub subpath: String,
+    /// The LIVE canonicalized root for this resolution -- for repo contexts,
+    /// this is the repo root as computed THIS run, which may differ from
+    /// `context.root_path` (stale, from whenever the row was first inserted,
+    /// since `upsert_context` never updates an existing row). For path
+    /// contexts it is the resolved cwd. Adoption must scan under this, not
+    /// the stored (possibly stale) `root_path`, or it can silently miss
+    /// notes that belong to the current on-disk location.
+    pub live_root: std::path::PathBuf,
     /// User-facing warning, printed once per run (currently: shallow).
     pub warning: Option<String>,
 }
@@ -61,7 +69,7 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
                 &root.to_string_lossy(),
             )?;
             let subpath = rel_subpath(&root, &cwd);
-            return Ok(Resolved { context, subpath, warning });
+            return Ok(Resolved { context, subpath, live_root: root, warning });
         }
         Err(RepoIdError::Shallow) => {
             shallow = true;
@@ -84,7 +92,7 @@ pub fn resolve(store: &Store, cwd: &Path) -> Result<Resolved, ContextError> {
         );
     }
 
-    Ok(Resolved { context, subpath: ".".to_string(), warning })
+    Ok(Resolved { context, subpath: ".".to_string(), live_root: cwd, warning })
 }
 
 #[derive(Debug)]
@@ -107,7 +115,7 @@ pub fn adopt_if_needed(
     if resolved.context.kind != Kind::Repo {
         return Ok(None);
     }
-    let root = resolved.context.root_path.clone();
+    let root = resolved.live_root.to_string_lossy().to_string();
     let candidates = store.path_contexts_under(&root)?;
     if candidates.is_empty() {
         return Ok(None);

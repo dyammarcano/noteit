@@ -52,10 +52,6 @@ impl Store {
     pub fn conn(&self) -> &Connection {
         &self.conn
     }
-
-    pub fn conn_mut(&mut self) -> &mut Connection {
-        &mut self.conn
-    }
 }
 
 /// Unix timestamp in seconds. THE single definition -- `contexts.rs` and

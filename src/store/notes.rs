@@ -223,6 +223,8 @@ impl Store {
         &self,
         tag: &str,
         context_id: Option<i64>,
+        include_done: bool,
+        limit: Option<usize>,
     ) -> Result<Vec<(Context, Note)>, StoreError> {
         let mut sql = format!(
             "SELECT {CTX_COLS}, {NOTE_COLS} FROM notes n
@@ -231,10 +233,14 @@ impl Store {
              JOIN tags t       ON t.id = nt.tag_id
              WHERE t.name = ?1"
         );
+        if !include_done {
+            sql.push_str(" AND n.status = 'open'");
+        }
         if context_id.is_some() {
             sql.push_str(" AND n.context_id = ?2");
         }
         sql.push_str(" ORDER BY n.created_at DESC, n.id DESC");
+        sql.push_str(&limit_clause(limit));
 
         let conn = self.conn();
         let mut stmt = conn.prepare(&sql).map_err(StoreError::Sqlite)?;

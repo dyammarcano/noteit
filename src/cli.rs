@@ -271,7 +271,22 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
         }
         Invocation::List(a) => {
             let limit = effective_limit(a.limit);
-            if a.global {
+            if let Some(tag) = a.tag {
+                let scope = if a.global { None } else { Some(ctx.id) };
+                let total = store.notes_by_tag(&tag, scope, a.all, None)?.len();
+                let rows = store.notes_by_tag(&tag, scope, a.all, limit)?;
+                if a.global {
+                    let s = if a.flat {
+                        render::render_flat(&rows, total, limit)
+                    } else {
+                        render::render_grouped(&rows, total, limit)
+                    };
+                    writeln!(out, "{s}")?;
+                } else {
+                    let notes: Vec<_> = rows.into_iter().map(|(_, n)| n).collect();
+                    writeln!(out, "{}", render::render_list(&notes, limit, total))?;
+                }
+            } else if a.global {
                 let all = store.list_all_notes(a.all, None)?;
                 let total = all.len();
                 let mut rows = all;
@@ -291,11 +306,6 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                     render::render_grouped(&rows, total, limit)
                 };
                 writeln!(out, "{s}")?;
-            } else if let Some(tag) = a.tag {
-                let rows = store.notes_by_tag(&tag, Some(ctx.id))?;
-                let total = rows.len();
-                let notes: Vec<_> = rows.into_iter().map(|(_, n)| n).collect();
-                writeln!(out, "{}", render::render_list(&notes, limit, total))?;
             } else {
                 let total = store.list_notes(ctx.id, None, a.all, None)?.len();
                 let notes = store.list_notes(ctx.id, None, a.all, limit)?;

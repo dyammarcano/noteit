@@ -87,10 +87,16 @@ impl Store {
         self.conn()
             .execute(
                 "INSERT INTO contexts (kind, key, display_name, name_overridden, root_path, shallow_warned, created_at)
-                 VALUES (?1, ?2, ?3, 0, ?4, 0, ?5)",
+                 VALUES (?1, ?2, ?3, 0, ?4, 0, ?5)
+                 ON CONFLICT(kind, key) DO NOTHING",
                 params![kind.as_str(), key, display_name, root_path, now()],
             )
             .map_err(StoreError::Sqlite)?;
+        // A concurrent writer may have raced us between the find_context
+        // above and this INSERT and won -- ON CONFLICT DO NOTHING makes that
+        // harmless, and this read-back returns whichever row exists now
+        // (ours, or the racing writer's) instead of propagating
+        // SQLITE_CONSTRAINT_UNIQUE and losing the caller's note.
         self.find_context(kind, key)?
             .ok_or_else(|| StoreError::Sqlite(rusqlite::Error::QueryReturnedNoRows))
     }

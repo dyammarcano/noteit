@@ -130,9 +130,38 @@ fn add_note_keeps_tags_in_body_and_in_table() {
     // Body keeps the tag for display fidelity.
     assert!(n.body.contains("#fts5"));
     // Table drives queries.
-    let found = store.notes_by_tag("fts5", Some(ctx)).unwrap();
+    let found = store.notes_by_tag("fts5", Some(ctx), true, None).unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].1.id, n.id);
+}
+
+#[test]
+fn notes_by_tag_hides_done_by_default() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    let a = store.add_note(ctx, ".", "open one #bug").unwrap();
+    let b = store.add_note(ctx, ".", "done one #bug").unwrap();
+    store.set_status(b.id, Status::Done).unwrap();
+
+    let open_only = store.notes_by_tag("bug", Some(ctx), false, None).unwrap();
+    assert_eq!(open_only.len(), 1);
+    assert_eq!(open_only[0].1.id, a.id);
+
+    let all = store.notes_by_tag("bug", Some(ctx), true, None).unwrap();
+    assert_eq!(all.len(), 2);
+}
+
+#[test]
+fn notes_by_tag_respects_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let ctx = seed_ctx(&store);
+    for _ in 0..5 {
+        store.add_note(ctx, ".", "note #bug").unwrap();
+    }
+    let limited = store.notes_by_tag("bug", Some(ctx), true, Some(2)).unwrap();
+    assert_eq!(limited.len(), 2);
+    let unlimited = store.notes_by_tag("bug", Some(ctx), true, None).unwrap();
+    assert_eq!(unlimited.len(), 5);
 }
 
 #[test]

@@ -127,6 +127,64 @@ fn empty_path_context_fold_is_reported_and_audited() {
 }
 
 #[test]
+fn adoption_uses_the_live_root_not_a_stale_stored_one() {
+    // Regression for I2: upsert_context deliberately never updates an
+    // existing row's root_path (that's what protects `project rename` from
+    // being reverted). But that means a repo context's stored root_path can
+    // go stale relative to where the SAME repo (by urn) is actually checked
+    // out today. adopt_if_needed must scan under the LIVE root computed this
+    // run, not the stale stored one, or it silently orphans notes.
+    let origin = common::repo_with_commits(1);
+
+    // Clone X to location A and resolve there -- this seeds the repo
+    // context's root_path = A.
+    let a_dir = tempfile::tempdir().unwrap();
+    let url = format!("file:///{}", origin.path().to_str().unwrap().replace('\\', "/"));
+    common::git(a_dir.path(), &["clone", "-q", &url, "."]);
+    let mut store = Store::open_in_memory().unwrap();
+    let resolved_a = resolve(&store, a_dir.path()).unwrap();
+    assert_eq!(resolved_a.context.kind, Kind::Repo);
+    let a_canon = a_dir.path().canonicalize().unwrap();
+    assert_eq!(resolved_a.context.root_path, a_canon.to_string_lossy());
+
+    // Capture a note in a SEPARATE plain directory B (not yet a repo) --
+    // this creates a path context keyed at B.
+    let b_dir = tempfile::tempdir().unwrap();
+    let resolved_b_before = resolve(&store, b_dir.path()).unwrap();
+    assert_eq!(resolved_b_before.context.kind, Kind::Path);
+    store.add_note(resolved_b_before.context.id, ".", "note in B").unwrap();
+
+    // Now turn B into a clone of the SAME repo X -- same root commit, so
+    // resolving B will match the SAME urn already seeded (with root_path=A).
+    std::fs::remove_dir_all(b_dir.path()).unwrap();
+    std::fs::create_dir_all(b_dir.path()).unwrap();
+    common::git(b_dir.path(), &["clone", "-q", &url, "."]);
+
+    let resolved_b = resolve(&store, b_dir.path()).unwrap();
+    assert_eq!(resolved_b.context.kind, Kind::Repo);
+    assert_eq!(
+        resolved_b.context.id, resolved_a.context.id,
+        "B must resolve to the SAME repo context (same urn) as A"
+    );
+    // Confirm the precondition the whole test hinges on: the stored
+    // root_path is stale (still A), not B -- otherwise this test proves
+    // nothing.
+    let b_canon = b_dir.path().canonicalize().unwrap();
+    assert_ne!(
+        resolved_b.context.root_path,
+        b_canon.to_string_lossy(),
+        "precondition failed: stored root_path must be stale (A), not B"
+    );
+
+    let report = adopt_if_needed(&mut store, &resolved_b).unwrap();
+    let report = report.expect(
+        "the note captured in B must be adopted using the LIVE root (B), \
+         not the stale stored root_path (A) -- otherwise it is silently orphaned",
+    );
+    assert!(report.notes_moved >= 1);
+}
+
+#[test]
 fn a_repo_with_no_prior_path_notes_reports_no_adoption() {
     let mut store = Store::open_in_memory().unwrap();
     let dir = common::repo_with_commits(1);
