@@ -3,3 +3,6 @@
 
 # Worktrees live inside the checkout; never track their contents.
 /.claude/worktrees/
+
+# harden scratch
+docs/analysis/.harden/
