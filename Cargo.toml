@@ -2,6 +2,12 @@
 name = "noteit"
 version = "0.1.0"
 edition = "2024"
+description = "Capture ideas as notes bound to the git repo you're in — they follow the repo across clones and renames."
+license = "BSD-3-Clause"
+repository = "https://github.com/dyammarcano/noteit"
+readme = "README.md"
+keywords = ["notes", "cli", "git", "sqlite", "productivity"]
+categories = ["command-line-utilities"]
 
 [lib]
 name = "noteit"

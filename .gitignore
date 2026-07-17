@@ -6,3 +6,6 @@
 
 # harden scratch
 docs/analysis/.harden/
+
+# internal orchestration reports (not shipped)
+/.superpowers/
