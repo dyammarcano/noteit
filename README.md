@@ -1,5 +1,5 @@
 # noteit
-<!-- rev:001 -->
+<!-- rev:002 -->
 
 `noteit` is a command-line tool for capturing small ideas and notes that bind
 themselves to the git repository (or plain directory) you were in when you
@@ -69,6 +69,7 @@ noteit list                list notes            [--global] [--flat] [--tag <t>]
 noteit done <id>           mark a note done
 noteit open <id>           reopen a note
 noteit project rename <n>  rename the current project
+noteit adopt --undo        reverse the most recent adoption (and keep it reversed)
 noteit --help | --version
 ```
 
@@ -156,9 +157,13 @@ adopted 1 notes from 1 paths into demo
 Adoption only ever moves notes into the resolved repo context — it never
 touches an unrelated repo. A submodule guard skips any candidate whose own
 repo root differs from the one being resolved, so a nested repo's notes are
-never accidentally swallowed into its parent. Every fold is also recorded in
-an `adoptions` audit table, capturing what was folded in, which is what would
-let a future `noteit adopt --undo` reverse it (not implemented yet).
+never accidentally swallowed into its parent. Every fold is recorded in an
+`adoptions` audit table capturing what was folded in.
+
+If a fold wasn't what you wanted, `noteit adopt --undo` reverses the most
+recent adoption for the current repo: it restores the path context(s), moves
+the notes back, and *pins* those contexts so automatic adoption won't simply
+re-fold them on the next run. Run it again and it reports `nothing to undo`.
 
 ## Storage
 
