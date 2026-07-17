@@ -215,7 +215,21 @@ pub fn edit_in_editor() -> Result<String, Box<dyn std::error::Error>> {
         )
         .into());
     }
-    let body = std::fs::read_to_string(&path)?;
+    let body = match std::fs::read_to_string(&path) {
+        Ok(b) => b,
+        Err(e) => {
+            // Non-UTF-8 (or otherwise unreadable) content: keep the file
+            // and tell the user exactly where it is rather than silently
+            // losing it. Persist via `.keep()` since `tmp` would otherwise
+            // delete the file when dropped.
+            let kept_path = tmp.keep()?;
+            return Err(format!(
+                "could not read note from {} (invalid UTF-8): {e}; the file was left in place",
+                kept_path.display()
+            )
+            .into());
+        }
+    };
     Ok(body.trim().to_string())
 }
 
