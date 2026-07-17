@@ -1,6 +1,22 @@
 [package]
-name = "app"
+name = "noteit"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "noteit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "noteit"
+path = "src/main.rs"
+
+# gix MUST keep default features -- see Global Constraints.
+# No clap: the ambiguity rule fights its parser -- see Global Constraints.
 [dependencies]
+gix = "0.85"
+rusqlite = { version = "0.40", features = ["bundled"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+tempfile = "3.27"
