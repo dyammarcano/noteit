@@ -321,9 +321,15 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 // input repeats a project's header. Sort before truncating so
                 // the cap applies to what is actually shown.
                 if a.global && !a.flat {
+                    // display_name first for stable alphabetical grouping, then
+                    // ctx.id BEFORE created_at so two distinct contexts that
+                    // happen to share a display_name stay contiguous -- otherwise
+                    // render_grouped (which requires contiguity by context) would
+                    // interleave their rows and print duplicate-looking headers.
                     rows.sort_by(|x, y| {
                         x.0.display_name
                             .cmp(&y.0.display_name)
+                            .then(x.0.id.cmp(&y.0.id))
                             .then(y.1.created_at.cmp(&x.1.created_at))
                     });
                 }
@@ -346,9 +352,13 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
                 let total = all.len();
                 let mut rows = all;
                 if !a.flat {
+                    // See the tag-grouped branch above: ctx.id must sit before
+                    // created_at so same-named-but-distinct contexts stay
+                    // contiguous for render_grouped.
                     rows.sort_by(|x, y| {
                         x.0.display_name
                             .cmp(&y.0.display_name)
+                            .then(x.0.id.cmp(&y.0.id))
                             .then(y.1.created_at.cmp(&x.1.created_at))
                     });
                 }
