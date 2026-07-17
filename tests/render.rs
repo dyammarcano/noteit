@@ -1,4 +1,4 @@
-use noteit::render::{parse_short_id, render_grouped, render_list, short_id};
+use noteit::render::{parse_short_id, render_flat, render_grouped, render_list, short_id};
 use noteit::store::contexts::{Context, Kind};
 use noteit::store::notes::{Note, Status};
 
@@ -125,5 +125,55 @@ fn render_grouped_keeps_same_named_contexts_separate() {
 #[test]
 fn render_list_handles_empty() {
     let out = render_list(&[], None, 0);
+    assert!(out.contains("no notes"), "{out}");
+}
+
+#[test]
+fn render_flat_handles_empty() {
+    let out = render_flat(&[], 0, None);
+    assert!(out.contains("no notes"), "{out}");
+}
+
+#[test]
+fn render_flat_shows_context_name_and_body_inline() {
+    let ctx_a = context(10, "app-one");
+    let ctx_b = context(20, "app-two");
+    let rows = vec![
+        (ctx_a, note_at(1, 100, "fix the tokenizer")),
+        (ctx_b, note_at(2, 200, "write docs")),
+    ];
+
+    let out = render_flat(&rows, rows.len(), None);
+    assert!(out.contains("app-one"), "{out}");
+    assert!(out.contains("fix the tokenizer"), "{out}");
+    assert!(out.contains("app-two"), "{out}");
+    assert!(out.contains("write docs"), "{out}");
+    // Flat rows are not grouped -- no bare-header line for the context name.
+    assert!(!out.lines().any(|l| l == "app-one"), "{out}");
+}
+
+#[test]
+fn render_flat_announces_truncation() {
+    let ctx = context(1, "app");
+    let rows: Vec<_> = (1..=10)
+        .map(|i| (ctx.clone(), note_at(i, i, "x")))
+        .collect();
+
+    let out = render_flat(&rows, 25, Some(10));
+    assert!(out.contains("15 more"), "{out}");
+    assert!(out.contains("--limit 0"), "{out}");
+}
+
+#[test]
+fn render_flat_is_quiet_when_nothing_is_truncated() {
+    let ctx = context(1, "app");
+    let rows = vec![(ctx, note_at(1, 1, "x"))];
+    let out = render_flat(&rows, 1, Some(50));
+    assert!(!out.contains("more"), "{out}");
+}
+
+#[test]
+fn render_grouped_handles_empty() {
+    let out = render_grouped(&[], 0, None);
     assert!(out.contains("no notes"), "{out}");
 }
