@@ -82,3 +82,26 @@ fn path_contexts_under_finds_descendants_only() {
     assert!(keys.contains(&"D:\\rust\\noteit\\src"));
     assert!(!keys.contains(&"D:\\rust\\other"));
 }
+
+#[test]
+fn path_contexts_under_excludes_adjacent_prefix_siblings() {
+    // This test verifies that path_contexts_under() correctly excludes sibling directories
+    // that share a string prefix but are NOT true descendants. The dangerous case is a
+    // directory like "D:\rust\noteit-other" that starts with the root's key but lacks a
+    // path separator, which a naive LIKE pattern would incorrectly match.
+    // If this breaks, a future feature that folds notes by project path would silently
+    // swallow a different project's notes.
+    let store = Store::open_in_memory().unwrap();
+    store.upsert_context(Kind::Path, "D:\\rust\\noteit", "noteit", "D:\\rust\\noteit").unwrap();
+    store.upsert_context(Kind::Path, "D:\\rust\\noteit\\src", "src", "D:\\rust\\noteit\\src").unwrap();
+    store.upsert_context(Kind::Path, "D:\\rust\\noteit-other", "noteit-other", "D:\\rust\\noteit-other").unwrap();
+    store.upsert_context(Kind::Path, "D:\\rust\\noteitXother", "noteitXother", "D:\\rust\\noteitXother").unwrap();
+
+    let found = store.path_contexts_under("D:\\rust\\noteit").unwrap();
+    let keys: Vec<&str> = found.iter().map(|c| c.key.as_str()).collect();
+    assert_eq!(keys.len(), 2, "got {keys:?}");
+    assert!(keys.contains(&"D:\\rust\\noteit"), "root not found in {keys:?}");
+    assert!(keys.contains(&"D:\\rust\\noteit\\src"), "descendant not found in {keys:?}");
+    assert!(!keys.contains(&"D:\\rust\\noteit-other"), "adjacent-prefix sibling leaked in {keys:?}");
+    assert!(!keys.contains(&"D:\\rust\\noteitXother"), "prefix+char sibling leaked in {keys:?}");
+}
