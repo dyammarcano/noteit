@@ -1,5 +1,5 @@
 # BACKLOG
-<!-- rev:007 -->
+<!-- rev:008 -->
 
 Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
@@ -33,6 +33,19 @@ blocks the current release; each item is tracked so it isn't lost.
   query is collapsed to one scan via `COUNT(*) OVER()`: the four read methods
   return `(rows, total)`, computing `total` in the same limited query.
   Behavior unchanged (same rows, order, truncation notice).
+
+## Shipped — maturation pass (2026-07-18)
+
+Driven by `docs/analysis/MATURITY.md`'s improvement route:
+
+- `cargo-deny` supply-chain gate (`deny.toml` + CI), coverage-feasibility
+  system-SQLite feature path, dedup file-counter + removed dead `Status` trait,
+  `//!` headers for the 9 core modules, ADR-0006 (CLI stability), decoupled
+  `parse.rs` from plugin internals, tag-triggered release workflow, and a
+  consolidated notice helper.
+- **Still open (operator action):** resolve GitHub Actions runner/billing so CI
+  runs green — the highest-leverage remaining item, but account-side, not a code
+  change.
 
 ## Deferred by design (from the original spec's out-of-scope list)
 

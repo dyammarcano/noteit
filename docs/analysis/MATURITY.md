@@ -1,78 +1,112 @@
 # noteit — Maturity Rating
 
-Project type: Rust (Cargo, edition 2024) CLI. Assessed 2026-07-17.
+**Project type:** Rust (Cargo, edition 2024) CLI · **Assessed:** 2026-07-18
+**Stage: 4 — Production (numeric) — but effectively a strong Release-Candidate**
+**Weighted score: 91.4 / 100** · **Confidence: Medium**
 
-> **Update — 2026-07-17 (post-hardening + plugin).** Most of the original
-> Phase 1/2 route below has since landed; the scorecard rows are annotated
-> inline with **[UPDATE]** where reality has moved. Summary of what changed:
-> - **CI/CD (was F → now ~C):** `.github/workflows/ci.yml` exists and runs
->   fmt + `clippy --all-targets -D warnings` + `cargo test` + `cargo audit` on
->   push/PR. (Hosted-runner billing is an account-side gap, not a repo gap.)
-> - **Code Quality (was C → now ~B):** the 2 clippy findings are fixed and a
->   `[lints.clippy] all = deny` gate is active in `Cargo.toml`; `cargo clippy
->   --all-targets -- -D warnings` is clean.
-> - **Security (C):** `cargo audit` is now available (0.22.2) and wired into CI;
->   a local run scans 191 deps with no advisories.
-> - **Stability (was C → now ~C+):** a git remote is configured and `master` is
->   pushed to GitHub; `LICENSE` (BSD-3) is present.
-> - **Scope grew:** a plugin system was added (`src/plugin/*`, `noteit plugin
->   install|list|status|uninstall`), lifting the suite from 71 → **139 tests**.
->   `cli.rs` was refactored into `cli/parse.rs` + `cli/mod.rs` and gained
->   integration + property tests; its dispatch path is now exercised end-to-end.
->   Coverage numbers below are the last one-off measurement. A local
->   `cargo llvm-cov` re-run is impractical (the instrumented rebuild of the
->   bundled SQLite doesn't finish in a reasonable window), so coverage is now
->   tracked by the **CI coverage job** (`.github/workflows/ci.yml`) rather than a
->   local one-off.
->
-> Re-run a full `/project:rating` audit to recompute the weighted score; it is
-> expected to have moved up from 64.8 (Beta) toward the Beta/Production boundary.
+> **Honesty caveat (read first).** The weighted score lands at 91.4, which maps
+> to Stage 4 on the score ladder — but two *Production-defining* criteria are
+> **unmet**: (1) there is **no measured test-coverage number** (`cargo llvm-cov`
+> is infeasible locally — the instrumented rebuild of the bundled SQLite times
+> out), and (2) **CI has never run green** (GitHub Actions has no hosted runner
+> assigned — account-side billing). The high score reflects genuinely strong
+> *code-level* signals (security, correctness, deps, docs); it does **not**
+> reflect production battle-testing, which a ~2-week-old solo greenfield simply
+> hasn't had. Treat real-world readiness as **high Release-Candidate** until the
+> two gating criteria are satisfied. Confidence is Medium because the
+> highest-weighted dimension (Testing) rests on an unverifiable coverage signal.
 
-**Overall stage: 2 — Beta** (weighted score ≈ 64.8 / 100, band 50–67)
-**Confidence: Medium** — most signals were directly measured (test run, clippy, `cargo llvm-cov`, `cargo tree --duplicates`, greps, git log); a few (ops readiness, stability trend) are qualitative/estimated given the project's small size and single-contributor local history (no remote, no CI runs to sample).
+## Delta since last assessment (2026-07-17)
 
-Exit bar for the audit is stage 4 (Production) — this project sits two stages below that, which is expected for a ~1500-LOC greenfield tool with no CI/release infrastructure yet.
+Prior: **Stage 2 — Beta, 64.8.** Every dimension improved; +26.6 points, +2 stages
+(numeric). Drivers: CI added + clippy-`deny` gate + `cargo audit` (CI/CD **F→B**,
+Code-Quality **C→A-**, Security **C→A**), the plugin system + integration/property
+tests (Testing **C→B**, Correctness **B→A**), a full docs set + ADRs + man +
+completions (Docs **B→A**), `v0.1.0` released + consolidated backlog (Stability
+**C→B**), env config + degradation ladder (Ops **C→B+**), pinned deps + audit
+(Deps **C→A**), and the `cli.rs` split (Arch **B→A-**).
 
 ## Dimension scorecard
 
-| # | Dimension (weight) | Stage/Grade | Evidence | Gap to next stage |
-|---|---|---|---|---|
-| 1 | Architecture & Boundaries (3) | B | Clean module split: `src/cli.rs`(372) `context.rs`(153) `render.rs`(115) `repoid.rs`(82) `store/{mod,contexts,notes,schema}.rs`; largest file 372 lines, no god-files; design captured in `docs/superpowers/specs/2026-07-17-noteit-design.md` and `docs/superpowers/plans/2026-07-17-noteit.md` | Add a lightweight `docs/adr/` or `ARCHITECTURE.md` with a diagram; formalize module boundaries as public interfaces |
-| 2 | Testing & Coverage (5) | C | `cargo llvm-cov --summary-only`: **TOTAL 71.98% line cover, 63.50% region cover, 72.22% function cover** (measured). Per-file: `cli.rs` only **25.99% region / 29.60% line** cover, `main.rs` 0%, vs `store/contexts.rs` 86.22%/95.65%. 71 tests total, all passing (`cargo test`) | Cover `cli.rs` dispatch/arg paths (currently the weakest module) and wire coverage into CI so it's tracked, not one-off |
-| 3 | CI/CD & Release (4) | F | `Test-Path .github\workflows` → `False`; no tags/releases; `git remote -v` → empty (no remote at all); `Cargo.toml` version `0.1.0` (dev snapshot) | Add a GitHub Actions workflow running build+test+clippy+coverage on every push; that alone moves this dimension from F to at least C |
-| 4 | Security (4) | C | `cargo-audit` not installed → `error: no such command: audit` (no dep-vuln scanning available); `unsafe` count in `src/` = **0**; only 1 `.expect(` (`src/render.rs:21`, `.expect("ascii")`) and 0 `.unwrap()` in `src/` | Install/wire `cargo audit` (or `cargo deny`) into CI; audit the one `expect(` for a real failure mode |
-| 5 | Documentation (2) | B | `README.md` present with rev-tag (`rev:003`), install + quick-tour walkthrough; `docs/superpowers/specs/` + `plans/` capture design decisions; no `ARCHITECTURE.md`/`CHANGELOG.md`/formal ADR log | Add `docs/ARCHITECTURE.md` and start a `CHANGELOG.md` once releases begin |
-| 6 | Operational Readiness (4) | C | CLI tool (no server, so health/metrics don't directly apply); errors surfaced via `thiserror`-based error types (`Cargo.toml:19`); user-facing status via `eprintln!` (`src/cli.rs:251`), not structured logging; single SQLite file store, no config layering beyond repo-bound path resolution | Add basic `--verbose`/log-level control and document the on-disk DB location/config surface |
-| 7 | Code Quality & Tech Debt (3) | C | `cargo clippy --all-targets` → 2 real warnings: collapsible `if` (`src/cli.rs:248`), `map_or` → `is_none_or` simplification (`src/repoid.rs:77`); plus 4 dead-code warnings for unused test helpers in `tests/common/mod.rs` (`plain_dir`, `git_root_sha`, `path_of` ×2); no `TODO`/`FIXME`/`HACK` found in `src/`; no `clippy.toml`/`rustfmt.toml` present | Fix the 2 clippy findings and prune/gate unused test helpers; add `clippy.toml` + CI `-D warnings` gate |
-| 8 | Dependency & Supply-chain Health (3) | C | Only 3 direct deps (`gix 0.85`, `rusqlite 0.40` bundled, `thiserror 2.0`) + `tempfile` dev-dep, but `cargo tree` shows **542 lines** (large transitive tree, driven almost entirely by `gix`'s internal crate family); `cargo tree --duplicates` shows **3 duplicate `hashbrown` versions** (0.14.5, 0.16.1, 0.17.1) pulled in via `dashmap`/`clru`/`rusqlite`/gix internals; no `cargo audit` available to check CVE status | Run `cargo audit`/`cargo deny` once installed; evaluate whether `gix`'s default-feature transitive bloat (explicitly called out as required in `Cargo.toml:14`) is worth revisiting |
-| 9 | Stability & Change Management (3) | C | `git log --oneline` → **36 commits**, no remote configured (`git remote -v` empty) — single-machine, pre-collaboration history; version pinned at `0.1.0`; no deprecation policy needed yet at this stage but also none documented | Push to a remote, tag a first release, and start a `docs/BACKLOG.md`-driven change log (a `BACKLOG.md` already exists at `docs/BACKLOG.md`) |
-| 10 | Correctness & Robustness (4) | B | `src/`: **0** `.unwrap()`, **1** `.expect(` (`render.rs:21`), **0** `panic!`, **0** `unsafe` — clean error propagation via `thiserror`; all 71 tests pass including idempotent-migration and FTS-edge-case tests (`store/notes.rs`: `migrations_are_idempotent`, `search_with_unbalanced_quote_does_not_error`); single-threaded CLI process against one SQLite connection, so no data-race surface to probe with `-race`-equivalent tooling | Add a fuzz/property test pass on the FTS query sanitizer (`sanitize_fts_query`) and CLI arg parser for defensive-input hardening |
+| # | Dimension (wt) | Grade | Evidence (measured unless noted) |
+|---|---|---|---|
+| 1 | Architecture (3) | A- | Acyclic layers (`store/*` leaf; `cli→context/render/store`; `plugin` self-contained per ADR-0004); no god-file (largest src ~382 L); ADR-0001..0005. Gap: `cli/parse.rs` names `crate::plugin::{PluginCmd,HostSel}`. |
+| 2 | Testing (5) | B | 160 tests — integration (`assert_cmd`) + property fuzz (`tests/property.rs`) + unit; fast/deterministic. **Coverage N/A** — `cargo llvm-cov` infeasible (instrumented bundled-SQLite rebuild >10 min; prior ~51 min); CI coverage job is `continue-on-error` + never sampled. No mutation testing. |
+| 3 | CI/CD (4) | B | `ci.yml`: fmt + `clippy -D warnings` + test + `cargo audit` (blocking) + coverage (non-blocking). `v0.1.0` tagged + GitHub Release. **Never observed green** (no hosted runner — billing). No automated release workflow. |
+| 4 | Security (4) | A | `cargo audit` = 0 advisories / 191 deps (blocking CI job). 0 `unsafe` in prod (6 total, all `#[cfg(test)]` `set_var`). Parameterized SQL (`params!` ×28) + `sanitize_fts_query`. `edit_in_editor` spawns `$EDITOR` as arg, no shell. |
+| 5 | Documentation (2) | A | Full managed set: README (rev:006), CHANGELOG, LICENSE, AGENTS (rev:003), ARCHITECTURE (rev:001, mermaid), ADR-0001..0005, BACKLOG (rev:007), man page, completions. 59 `//!` in `plugin/`+`cli`. Gap: 9 core modules (`main`, `lib`, `context`, `repoid`, `render`, `store/*`) have no `//!` header. |
+| 6 | Operational-Readiness (4) | B+ | thiserror enums + never-lose-a-note degradation ladder (`context.rs`); env config (`NOTEIT_DB`/`QUIET`/`PLUGIN_ROOT`); WAL + `busy_timeout(5s)`; stdout=data / stderr=notices; documented exit codes; deploy via `cargo install` + man + completions. Gap: printf `eprintln`, no verbosity levels (minor for a CLI). Server signals (health/metrics/shutdown) N/A. |
+| 7 | Code-Quality (3) | A- | `clippy all=deny` clean; 0 suppressions; 1 prose TODO; no god-files. Gaps: `installed_file_count` (`command.rs:156`) ≡ `count_files_under` (`hosts.rs:207`) byte-identical dup; `pub trait Status` (`host.rs`) defined+exported, never impl'd (dead, superseded by `Doctor`). |
+| 8 | Dependencies (3) | A | 4 pinned direct deps + `Cargo.lock` (191 resolved); 0 advisories. 3 `hashbrown` versions — all transitive via `gix` (accepted/documented; `Cargo.toml` mandates gix default features). Gap: no `cargo-deny` license gate. |
+| 9 | Stability (3) | B | Append-only DB migrations (code-enforced `schema.rs:5`, regression-tested); consolidated BACKLOG; `v0.1.0` + CHANGELOG. Gaps: pre-1.0, no CLI deprecation policy; solo contributor; greenfield churn (89 commits/30 d — expected for age). |
+| 10 | Correctness (4) | A | 0 prod `unwrap` (1 provably-infallible `expect` in `render.rs:21`); never-lose-a-note via `.keep()` on editor-failure paths; atomic tmp+rename installs; property tests; single-threaded (no race surface). Minor: best-effort `let _ = remove_dir_all`. |
 
-Weights sum to 35. Weighted score = Σ(grade_points × weight) / 35 ≈ **64.8** → **Stage 2 (Beta)**.
+**Rollup:** A=100, A-≈94, B+≈88, B=82, C=65. Weighted Σ = (94·3 + 82·5 + 82·4 +
+100·4 + 100·2 + 88·4 + 94·3 + 100·3 + 82·3 + 100·4) / 35 = 3200 / 35 = **91.4**.
 
-## Weakest dimensions (ranked by stage, not yet by leverage)
+### Audit-process note
 
-1. **CI/CD & Release — F** (no workflow, no releases, no remote)
-2. **Testing & Coverage — C**, weight 5 (highest-weighted dimension; `cli.rs` at 29.6% line coverage is the concrete gap)
-3. **Security / Dependency Health — C/C** (no `cargo audit` installed anywhere to even check CVE exposure; 3 duplicate `hashbrown` versions in the tree)
+Three dimension auditors (Stability, Ops, Documentation) reported `CHANGELOG.md`,
+`completions/*`, and `man/noteit.1` as *missing* — a **false negative**: their
+`Glob` ran against the session's stale worktree (branch tip predating those
+files) while their absolute-path `Read`s saw the current tree. Direct
+verification (`git ls-files` @ `15aadca`) confirms **all exist on disk and in
+git**. Those findings were discarded; the grades above reflect the corrected
+picture (this lifted Ops from B to B+ and removed a false Stability weakness).
 
-## Improvement route (Stabilize → Harden → Mature) to reach stage 4
+## Ranked weak points (by leverage, not severity)
 
-**The one highest-leverage move: stand up a CI workflow (`.github/workflows/ci.yml`) running `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo llvm-cov`.**
-This single change is the dominant node in the blocks/unblocks graph: it (a) turns the CI/CD dimension from F to at least C immediately, (b) makes the already-measured 72% coverage number continuously enforced instead of one-off, (c) gates the 2 outstanding clippy findings from regressing, and (d) is the prerequisite plumbing for adding `cargo audit`/`cargo deny` and for cutting a first tagged release. Nothing else on this list can be verified as durable without it.
+1. **CI never run green** (CI/CD w4) — configured pipeline, zero passing runs.
+2. **Coverage unmeasurable** (Testing w5) — the ceiling on the heaviest dimension.
+3. No automated release workflow (CI/CD w4, Stability w3).
+4. No `cargo-deny` license/advisory gate (Security w4, Deps w3).
+5. `parse.rs` coupled to concrete plugin types (Arch w3).
+6. Dup file-counter + dead `Status` trait (Code-Quality w3).
+7. 9 core modules lack `//!` headers (Docs w2).
+8. No verbosity levels / structured logging (Ops w4).
 
-### Phase 1 — Stabilize (this week)
-- Add `.github/workflows/ci.yml`: build, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo llvm-cov --summary-only`. *Unblocks: CI dimension, coverage tracking, quality gate.*
-- Fix the 2 clippy findings (`src/cli.rs:248` collapsible-if, `src/repoid.rs:77` map_or→is_none_or) and either use or `#[cfg(test)]`-gate/remove the 4 dead test helpers in `tests/common/mod.rs`. *Unblocks: Code Quality dimension; effort S.*
-- Add a `LICENSE` file (BSD-3-Clause per project convention) — currently absent, which is a real gap for any future distribution. *Effort S.*
+## Improvement route (Stabilize → Harden → Mature)
 
-### Phase 2 — Harden (next)
-- Install and wire `cargo audit` (or `cargo deny`) into the new CI workflow; resolve any findings. *Unblocks: Security + Dependency Health dimensions; depends on Phase 1's CI existing.*
-- Add integration/CLI-argument tests targeting `src/cli.rs` (currently 29.6% line coverage, the weakest module) to lift it toward the store-layer's ~80–95% bar. *Unblocks: Testing dimension's highest-weight gap.*
-- Add a fuzz/property test for `sanitize_fts_query` and CLI parsing to harden Correctness against malformed input. *Effort M.*
+### Phase 1 — Stabilize (clear the two gating criteria)
+- **Resolve GitHub Actions runner/billing → first green run.** Effort S. Validates test + audit gates and lets the coverage job sample. *First action:* enable the runner in repo Settings, re-run the workflow, capture the run URL.
+- **Make coverage measurable — break the bundled-SQLite instrumentation timeout.** Effort M. Add a coverage build using system libsqlite3 (`rusqlite` without `bundled`) so `cargo llvm-cov` finishes; flip the CI coverage job to blocking once a baseline lands. *First action:* add a `coverage-syslib` feature, run `cargo llvm-cov --features coverage-syslib --summary-only`, record the first %.
+- **Log the swallowed `remove_dir_all` cleanup error.** Effort S.
 
-### Phase 3 — Mature (once green)
-- Push to a remote, tag `v0.1.0`, start `CHANGELOG.md`, and add `docs/ARCHITECTURE.md` (a diagram of `cli → context/store → sqlite+FTS5`). *Unblocks: Release, Documentation, Stability dimensions.*
-- Revisit the `gix`-driven transitive dependency bloat (542-line tree, 3 duplicate `hashbrown` versions) now that CI/audit tooling exists to evaluate any change safely.
+### Phase 2 — Harden
+- **Add `cargo-deny`** (license + advisory + bans, codifying the accepted hashbrown dup). Effort S — closes Security + Deps in one move.
+- **Automated release workflow** (tag-triggered, reuse CI gate). Effort M — after CI is green.
+- **Decouple `parse.rs` from plugin internals** via a cli-layer command type. Effort M.
+- **Verbosity levels / structured logging** honoring `NOTEIT_QUIET`. Effort M.
 
-Re-run this rating after Phase 1 lands — CI alone should move CI/CD from F to C+ and lock in the existing 72% coverage number as a durable, continuously-checked signal rather than a point-in-time one.
+### Phase 3 — Mature
+- **`//!` headers for the 9 core modules.** Effort S.
+- **Dedup the file-counter + delete the dead `Status` trait.** Effort S.
+- **CLI stability / deprecation ADR** (pre-1.0 stance). Effort S.
+
+## Route execution (2026-07-18, same day)
+
+Most code-actionable route items were executed immediately after this rating:
+- **Done:** coverage-feasibility system-SQLite path (#2), `cargo-deny` gate (#3),
+  dedup file-counter + remove dead `Status` trait (#4), `//!` headers for 9 core
+  modules (#5), CLI-stability ADR-0006 (#7), decouple `parse.rs` from plugin
+  internals (#8), tag-triggered release workflow (#9), consolidated notice
+  helper (#10).
+- **Corrected:** #6 (swallowed `remove_dir_all`) was a **false finding** — all
+  such sites are `#[cfg(test)]` cleanup; the one prod uninstall uses a proper
+  `match`. Not actionable.
+- **Remaining (yours):** #1 — resolve GitHub Actions runner/billing so CI runs
+  green. This is the one thing below, and it is an account-side action.
+
+A re-rating after CI runs green + a coverage number is captured should clear the
+two Production-defining criteria and lift confidence from Medium.
+
+## The one thing
+
+**Get GitHub Actions to run green on a hosted runner (resolve the account-side
+billing/runner assignment).** It's the single highest-leverage move: the pipeline
+is already fully authored, so one external unblock converts a
+configured-but-unvalidated CI into a validated one and cascades into Testing
+(reproducible green + coverage sampling), Security (live audit gate), and release
+automation. It is an *account action, not a code change* — and it does **not** by
+itself yield a coverage number, so pair it with the coverage-feasibility fix
+(system-SQLite build). Together those two clear both unmet Production criteria.

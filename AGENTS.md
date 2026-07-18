@@ -1,5 +1,5 @@
 # AGENTS.md
-<!-- rev:003 -->
+<!-- rev:004 -->
 
 Instructions for agents (and human contributors) working in this repo.
 `noteit` is a Rust CLI that captures notes bound to a git repo's identity
@@ -15,7 +15,13 @@ cargo test
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings   # clippy-deny gate is active
 cargo audit                                 # dependency advisory scan
+cargo deny check                            # licenses + advisories + sources (deny.toml)
 ```
+
+`rusqlite`'s `bundled` feature is a **named default** (`default = ["bundled"]`):
+normal builds are self-contained, but a coverage build drops it
+(`cargo llvm-cov --no-default-features`, linking system libsqlite3) to avoid the
+instrumented bundled-SQLite rebuild that never finishes.
 
 The test suite currently has ~160 tests across `tests/adoption.rs`,
 `tests/cli.rs`, `tests/config.rs`, `tests/context.rs`, `tests/editor.rs`,
