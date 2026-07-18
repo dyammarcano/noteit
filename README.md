@@ -1,5 +1,5 @@
 # noteit
-<!-- rev:003 -->
+<!-- rev:004 -->
 
 `noteit` is a command-line tool for capturing small ideas and notes that bind
 themselves to the git repository (or plain directory) you were in when you
@@ -70,6 +70,9 @@ noteit done <id>           mark a note done
 noteit open <id>           reopen a note
 noteit project rename <n>  rename the current project
 noteit adopt --undo        reverse the most recent adoption (and keep it reversed)
+noteit plugin install --host <claude|codex|gemini|all>
+                           install noteit's assets into an AI host
+noteit plugin list | status | uninstall --host <h>
 noteit --help | --version
 ```
 
@@ -179,3 +182,26 @@ The database uses WAL mode with a busy timeout, so two shells capturing notes
 at the same time is safe. Schema migrations are tracked via
 `PRAGMA user_version`. Full-text search is powered by an FTS5 external-content
 table kept in sync via triggers.
+
+## Plugin (use noteit from an AI host)
+
+noteit can install itself as a plugin for AI coding hosts, so an assistant can
+capture and recall your repo-bound notes for you:
+
+```
+noteit plugin list                       # show hosts + install targets
+noteit plugin install --host claude      # install into ~/.claude/plugins/noteit
+noteit plugin install --host all         # claude + codex + gemini
+noteit plugin status                     # what's installed where
+noteit plugin uninstall --host claude
+```
+
+Each install renders noteit's bundled assets — a **skill** teaching the host how
+to drive the `noteit` CLI, three **slash commands** (`/note`, `/notes`,
+`/note-search`), and a **note-keeper agent** — into the host's plugin directory.
+Claude gets its native `.claude-plugin/plugin.json` layout with real
+`commands/`+`agents/`; skills-forward hosts (Codex, Gemini) additionally receive
+synthesized *library skills* so command/agent discovery survives a skills-only
+surface. Writes are atomic (tmp+rename) and sweep stale assets from a prior
+install. Set `NOTEIT_PLUGIN_ROOT` to install under a directory other than
+`$HOME`.

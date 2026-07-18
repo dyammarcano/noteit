@@ -5,7 +5,7 @@ use crate::store::notes::Status;
 /// known at parse time, which is what makes the rule unambiguous despite
 /// looking magical. `add` is the escape hatch for colliding text.
 pub const VERBS: &[&str] = &[
-    "add", "list", "search", "new", "done", "open", "project", "adopt", "delete",
+    "add", "list", "search", "new", "done", "open", "project", "adopt", "delete", "plugin",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +30,10 @@ pub enum CliError {
     AdoptNeedsUndo,
     #[error("usage: noteit delete <id>")]
     DeleteNeedsId,
+    #[error("usage: noteit plugin install|uninstall --host <claude|codex|gemini|all>")]
+    PluginNeedsHost,
+    #[error("unknown plugin subcommand: {0} (try: list, install, status, uninstall)")]
+    PluginUnknownSub(String),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -53,6 +57,7 @@ pub enum Invocation {
     Version,
     Adopt { undo: bool },
     Delete { id: String },
+    Plugin(crate::plugin::PluginCmd),
 }
 
 pub const HELP_TEXT: &str = "\
@@ -69,6 +74,9 @@ USAGE:
     noteit open <id>           reopen a note
     noteit delete <id>   delete a note permanently
     noteit project rename <n>  rename the current project
+    noteit plugin install --host <claude|codex|gemini|all>
+                               install noteit's assets into an AI host
+    noteit plugin list | status | uninstall --host <h>
     noteit --help | --version
 
 NOTES:
@@ -102,6 +110,47 @@ fn parse_list_args(rest: &[String]) -> Result<ListArgs, CliError> {
         i += 1;
     }
     Ok(a)
+}
+
+fn parse_host_flag(rest: &[String]) -> Result<Option<crate::plugin::HostSel>, CliError> {
+    use crate::plugin::HostSel;
+    let mut sel = None;
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "--host" => {
+                i += 1;
+                let v = rest.get(i).ok_or(CliError::PluginNeedsHost)?;
+                sel = Some(if v == "all" {
+                    HostSel::All
+                } else {
+                    HostSel::One(v.clone())
+                });
+            }
+            other => return Err(CliError::UnknownFlag(other.to_string())),
+        }
+        i += 1;
+    }
+    Ok(sel)
+}
+
+fn parse_plugin(rest: &[String]) -> Result<crate::plugin::PluginCmd, CliError> {
+    use crate::plugin::PluginCmd;
+    let (sub, flags) = match rest.split_first() {
+        Some((s, f)) => (s.as_str(), f),
+        None => ("list", &[][..]),
+    };
+    match sub {
+        "list" => Ok(PluginCmd::List),
+        "install" => Ok(PluginCmd::Install(
+            parse_host_flag(flags)?.ok_or(CliError::PluginNeedsHost)?,
+        )),
+        "uninstall" => Ok(PluginCmd::Uninstall(
+            parse_host_flag(flags)?.ok_or(CliError::PluginNeedsHost)?,
+        )),
+        "status" => Ok(PluginCmd::Status(parse_host_flag(flags)?)),
+        other => Err(CliError::PluginUnknownSub(other.to_string())),
+    }
 }
 
 pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
@@ -185,6 +234,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             let id = rest.first().ok_or(CliError::DeleteNeedsId)?;
             Ok(Invocation::Delete { id: id.clone() })
         }
+        "plugin" => Ok(Invocation::Plugin(parse_plugin(rest)?)),
         _ => unreachable!("VERBS and match arms must stay in sync"),
     }
 }
@@ -295,6 +345,12 @@ pub fn run(args: &[String]) -> Result<i32, Box<dyn std::error::Error>> {
         Invocation::Version => {
             println!("noteit {}", env!("CARGO_PKG_VERSION"));
             return Ok(0);
+        }
+        // Plugin install/status is filesystem-only and must work even without a
+        // usable notes DB, so it is handled before the database is opened.
+        Invocation::Plugin(cmd) => {
+            let mut out = std::io::stdout().lock();
+            return Ok(crate::plugin::command::run(&cmd, &mut out)?);
         }
         _ => {}
     }
@@ -516,6 +572,8 @@ pub fn run_core(
             }
         }
         Invocation::Help | Invocation::Version => unreachable!("handled above"),
+        // Plugin ops are dispatched in `run` before the DB is opened.
+        Invocation::Plugin(_) => unreachable!("handled in run() before DB open"),
     }
     Ok(0)
 }

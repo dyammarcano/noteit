@@ -12,3 +12,5 @@ docs/analysis/.harden/
 
 # local Claude Code settings (not shipped)
 /.claude/
+
+.scripts/
