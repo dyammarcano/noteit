@@ -1,5 +1,5 @@
 # AGENTS.md
-<!-- rev:001 -->
+<!-- rev:002 -->
 
 Instructions for agents (and human contributors) working in this repo.
 `noteit` is a Rust CLI that captures notes bound to a git repo's identity
@@ -12,12 +12,26 @@ constraints that must not be "optimized away".
 ```powershell
 cargo build
 cargo test
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings   # clippy-deny gate is active
+cargo audit                                 # dependency advisory scan
 ```
 
-The test suite currently has 56 tests across `tests/adoption.rs`,
-`tests/cli.rs`, `tests/context.rs`, `tests/render.rs`, `tests/repoid.rs`, and
-`tests/store.rs`, plus unit tests in the library. All must pass before
-committing.
+The test suite currently has ~156 tests across `tests/adoption.rs`,
+`tests/cli.rs`, `tests/context.rs`, `tests/editor.rs`, `tests/main_smoke.rs`,
+`tests/plugin.rs`, `tests/property.rs`, `tests/render.rs`, `tests/repoid.rs`,
+`tests/run.rs`, and `tests/store.rs`, plus unit tests in the library
+(including `src/plugin/*`). All gates above must pass before committing;
+`[lints.clippy] all = deny` is enforced in `Cargo.toml`.
+
+## Plugin surface
+
+`src/plugin/*` is a std-only plugin-host contract (ported — see `docs/port/`)
+plus noteit's own assets and host backends. It powers `noteit plugin
+install|list|status|doctor|uninstall --host <claude|codex|gemini|all>`, which
+renders bundled assets into `$HOME/.<host>/plugins/noteit/`
+(`NOTEIT_PLUGIN_ROOT` overrides the home dir). Plugin ops are filesystem-only
+and dispatched in `cli::run` *before* the DB opens.
 
 ## The `.scripts/` convention
 
@@ -81,6 +95,8 @@ inconsistent database.
 
 ## Where to look for the design rationale
 
+- `docs/ARCHITECTURE.md` — module map + capture/plugin flow diagrams (the
+  current-state architecture reference).
 - `docs/superpowers/specs/2026-07-17-noteit-design.md` — the original design
   spec (repo-id algorithm, schema, resolution ladder, adoption rules).
 - `docs/superpowers/plans/2026-07-17-noteit.md` — the task-by-task
