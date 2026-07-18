@@ -6,6 +6,7 @@ use crate::store::notes::Status;
 /// looking magical. `add` is the escape hatch for colliding text.
 pub const VERBS: &[&str] = &[
     "add", "list", "search", "new", "done", "open", "project", "adopt", "delete", "plugin",
+    "export",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -58,6 +59,7 @@ pub enum Invocation {
     Adopt { undo: bool },
     Delete { id: String },
     Plugin(crate::plugin::PluginCmd),
+    Export,
 }
 
 pub const HELP_TEXT: &str = "\
@@ -73,6 +75,7 @@ USAGE:
     noteit done <id>           mark a note done
     noteit open <id>           reopen a note
     noteit delete <id>   delete a note permanently
+    noteit export              dump all notes as JSON (backup)
     noteit project rename <n>  rename the current project
     noteit plugin install --host <claude|codex|gemini|all>
                                install noteit's assets into an AI host
@@ -236,6 +239,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             Ok(Invocation::Delete { id: id.clone() })
         }
         "plugin" => Ok(Invocation::Plugin(parse_plugin(rest)?)),
+        "export" => Ok(Invocation::Export),
         _ => unreachable!("VERBS and match arms must stay in sync"),
     }
 }
@@ -248,6 +252,17 @@ use crate::render;
 use crate::store::{Store, default_db_path};
 
 const DEFAULT_LIMIT: usize = 50;
+
+/// Whether informational stderr notices (repo-detection warnings, adoption
+/// announcements) should be printed. `NOTEIT_QUIET` set to anything other than
+/// empty or `0` suppresses them. Hard errors are never suppressed — only the
+/// advisory notices that a scripting caller may not want on stderr.
+fn notices_enabled() -> bool {
+    match std::env::var_os("NOTEIT_QUIET") {
+        Some(v) => v.is_empty() || v == "0",
+        None => true,
+    }
+}
 
 fn effective_limit(requested: Option<usize>) -> Option<usize> {
     match requested {
@@ -381,7 +396,10 @@ pub fn run_core(
     out: &mut dyn Write,
 ) -> Result<i32, Box<dyn std::error::Error>> {
     let resolved = resolve(store, cwd)?;
-    if let Some(w) = &resolved.warning {
+    let notices = notices_enabled();
+    if let Some(w) = &resolved.warning
+        && notices
+    {
         eprintln!("warning: {w}");
     }
 
@@ -391,6 +409,7 @@ pub fn run_core(
     // and semantically confusing (adopt-then-undo in one invocation).
     if !matches!(inv, Invocation::Adopt { undo: true })
         && let Some(r) = adopt_if_needed(store, &resolved)?
+        && notices
     {
         eprintln!(
             "adopted {} notes from {} paths into {}",
@@ -571,6 +590,11 @@ pub fn run_core(
                     return Ok(1);
                 }
             }
+        }
+        Invocation::Export => {
+            // Full backup: every note in every context, including done ones.
+            let (rows, _total) = store.list_all_notes(true, None)?;
+            write!(out, "{}", render::export_json(&rows))?;
         }
         Invocation::Help | Invocation::Version => unreachable!("handled above"),
         // Plugin ops are dispatched in `run` before the DB is opened.

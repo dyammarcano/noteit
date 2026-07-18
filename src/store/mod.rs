@@ -63,8 +63,18 @@ pub(crate) fn now() -> i64 {
         .unwrap_or(0)
 }
 
-/// `%USERPROFILE%\noteit.db` on Windows, `$HOME/noteit.db` elsewhere.
+/// The database path noteit will open.
+///
+/// `NOTEIT_DB`, if set, wins outright (an absolute or relative file path) — this
+/// is the supported way to point noteit at an alternate database for testing,
+/// scripting, or keeping separate note stores. A global `--db-path` flag is
+/// deliberately avoided: it would fight the first-arg-is-verb-or-note ambiguity
+/// rule (see ADR-0002). Otherwise the default is `%USERPROFILE%\noteit.db` on
+/// Windows, `$HOME/noteit.db` elsewhere.
 pub fn default_db_path() -> Result<PathBuf, StoreError> {
+    if let Some(explicit) = std::env::var_os("NOTEIT_DB") {
+        return Ok(PathBuf::from(explicit));
+    }
     let home = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
         .ok_or(StoreError::NoHome)?;

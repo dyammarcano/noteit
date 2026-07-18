@@ -118,3 +118,50 @@ pub fn render_flat(rows: &[(Context, Note)], total: usize, limit: Option<usize>)
     }
     out.trim_end().to_string()
 }
+
+/// Escape a string as a JSON string body (without the surrounding quotes).
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Serialize every note (with its context) as a stable, hand-rolled JSON
+/// document for `noteit export`. Std-only — no serde dependency.
+pub fn export_json(rows: &[(Context, Note)]) -> String {
+    let mut out = String::from("{\n  \"noteit_export\": \"v1\",\n  \"notes\": [");
+    for (i, (ctx, n)) in rows.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str("\n    {");
+        out.push_str(&format!("\"id\": {}, ", n.id));
+        out.push_str(&format!("\"context_key\": \"{}\", ", json_escape(&ctx.key)));
+        out.push_str(&format!(
+            "\"project\": \"{}\", ",
+            json_escape(&ctx.display_name)
+        ));
+        out.push_str(&format!("\"subpath\": \"{}\", ", json_escape(&n.subpath)));
+        out.push_str(&format!("\"body\": \"{}\", ", json_escape(&n.body)));
+        out.push_str(&format!("\"status\": \"{}\", ", n.status.as_str()));
+        out.push_str(&format!("\"created_at\": {}, ", n.created_at));
+        out.push_str(&format!("\"updated_at\": {}", n.updated_at));
+        out.push('}');
+    }
+    if rows.is_empty() {
+        out.push_str("]\n}\n");
+    } else {
+        out.push_str("\n  ]\n}\n");
+    }
+    out
+}
