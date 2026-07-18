@@ -1,3 +1,6 @@
+//! Formatting for user-facing output: short ids, list/grouped/flat note
+//! rendering, and the `noteit export` JSON serializer.
+
 use crate::store::contexts::Context;
 use crate::store::notes::{Note, Status};
 

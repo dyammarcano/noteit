@@ -1,3 +1,7 @@
+//! SQLite persistence: opening the database (WAL + busy timeout + migrations),
+//! the default/`NOTEIT_DB` path resolution, and the contexts/notes query
+//! layers. See ADR-0003.
+
 pub mod contexts;
 pub mod notes;
 mod schema;

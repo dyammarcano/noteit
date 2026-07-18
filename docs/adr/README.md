@@ -12,3 +12,4 @@ mark one `Superseded`.
 | [0003](0003-single-sqlite-store-with-fts5.md) | Single SQLite store with FTS5 | Accepted |
 | [0004](0004-std-only-plugin-host-contract.md) | Std-only ported plugin-host contract | Accepted |
 | [0005](0005-hard-delete-exception.md) | Hard delete as the one note-losing exception | Accepted |
+| [0006](0006-cli-stability-pre-1.0.md) | CLI stability & deprecation stance (pre-1.0) | Accepted |

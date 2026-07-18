@@ -1,3 +1,6 @@
+//! Resolve the current directory to a note context (repo-bound or path-bound)
+//! and fold path contexts into a repo context once a repo appears (adoption).
+
 use std::path::Path;
 
 use crate::repoid::{self, RepoIdError};

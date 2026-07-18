@@ -1,3 +1,6 @@
+//! Note storage: create/list/search/status/delete, `#tag` extraction, and the
+//! `sanitize_fts_query` guard that turns any raw query into a safe FTS5 MATCH.
+
 use rusqlite::{Row, params};
 
 // Shared helpers -- do NOT re-declare these here. `row_to_context` and

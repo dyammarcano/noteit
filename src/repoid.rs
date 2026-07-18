@@ -1,3 +1,7 @@
+//! Derive a repository's stable identity from its root commit SHA (via `gix`).
+//! `RepoIdError` distinguishes not-a-repo / no-commits / shallow so callers can
+//! degrade correctly rather than fail open. See ADR-0001.
+
 use std::path::{Path, PathBuf};
 
 /// A stable, location-independent repository identity.

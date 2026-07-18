@@ -1,3 +1,7 @@
+//! Append-only schema migrations tracked via `PRAGMA user_version` (v1, v2),
+//! plus the FTS5 external-content table and triggers. Never edit a shipped
+//! migration; add a new version. See ADR-0003.
+
 use rusqlite::Connection;
 
 use super::StoreError;

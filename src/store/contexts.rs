@@ -1,3 +1,6 @@
+//! Context storage: the repo/path contexts notes bind to — upsert, lookup,
+//! rename, and the adoption bookkeeping (folding path contexts into a repo).
+
 use rusqlite::{Row, params};
 
 use super::{Store, StoreError};
