@@ -1,0 +1,48 @@
+#compdef noteit
+# zsh completion for noteit — mirrors VERBS in src/cli.rs.
+
+_noteit() {
+  local -a verbs
+  verbs=(
+    'add:capture text that collides with a verb'
+    'list:list notes for the current context'
+    'search:full-text search'
+    'new:capture a longer note in $EDITOR'
+    'done:mark a note done'
+    'open:reopen a note'
+    'project:rename the current project'
+    'adopt:reverse the most recent adoption (--undo)'
+    'delete:delete a note permanently'
+    'plugin:install noteit into an AI host'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'command' verbs
+    _arguments '--help[show help]' '--version[show version]'
+    return
+  fi
+
+  case "${words[2]}" in
+    plugin)
+      if (( CURRENT == 3 )); then
+        _values 'subcommand' list install status doctor uninstall
+      else
+        _arguments '--host[target host]:host:(claude codex gemini all)'
+      fi
+      ;;
+    list)
+      _arguments '--global' '--flat' '--all' '--tag[tag]:tag:' '--limit[limit]:n:'
+      ;;
+    search)
+      _arguments '--global'
+      ;;
+    adopt)
+      _arguments '--undo'
+      ;;
+    project)
+      _values 'subcommand' rename
+      ;;
+  esac
+}
+
+_noteit "$@"
