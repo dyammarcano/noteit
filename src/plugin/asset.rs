@@ -1,6 +1,6 @@
 //! Portable plugin assets and their in-memory registry.
 //!
-//! Ported from `pkg/aihost/asset.go` (lensr). An [`Asset`] is one plugin file
+//! Ported from an internal Go plugin-host package. An [`Asset`] is one plugin file
 //! (frontmatter + body) classified by [`Kind`]; [`Asset::render`] emits on-disk
 //! markdown bytes with a `created:` marker injected per asset-type convention
 //! (skills → frontmatter, others → trailing HTML comment).

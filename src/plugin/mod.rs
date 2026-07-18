@@ -1,4 +1,4 @@
-//! Portable plugin-host contract, ported from lensr's `pkg/aihost` core.
+//! Portable plugin-host contract, ported from an internal Go plugin-host package.
 //!
 //! Defines the host-agnostic building blocks noteit uses to package and install
 //! itself as a plugin across CLI hosts (Claude, Codex, Gemini): [`Asset`]s and

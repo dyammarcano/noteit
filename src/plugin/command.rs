@@ -31,15 +31,17 @@ pub enum PluginCmd {
     Uninstall(HostSel),
 }
 
-fn resolve(sel: &HostSel, out: &mut dyn Write) -> io::Result<Vec<NoteitHost>> {
+fn resolve(sel: &HostSel) -> Vec<NoteitHost> {
     match sel {
-        HostSel::All => Ok(NoteitHost::all()),
+        HostSel::All => NoteitHost::all(),
         HostSel::One(name) => match NoteitHost::by_name(name) {
-            Some(h) => Ok(vec![h]),
+            Some(h) => vec![h],
             None => {
+                // Diagnostics go to stderr; stdout is reserved for operation
+                // output (noteit's stream convention).
                 let known: Vec<String> = NoteitHost::all().iter().map(|h| h.name()).collect();
-                writeln!(out, "unknown host: {name} (known: {})", known.join(", "))?;
-                Ok(vec![])
+                eprintln!("unknown host: {name} (known: {})", known.join(", "));
+                vec![]
             }
         },
     }
@@ -63,7 +65,7 @@ pub fn run(cmd: &PluginCmd, out: &mut dyn Write) -> io::Result<i32> {
             Ok(0)
         }
         PluginCmd::Install(sel) => {
-            let hosts = resolve(sel, out)?;
+            let hosts = resolve(sel);
             if hosts.is_empty() {
                 return Ok(2);
             }
@@ -80,7 +82,7 @@ pub fn run(cmd: &PluginCmd, out: &mut dyn Write) -> io::Result<i32> {
             Ok(0)
         }
         PluginCmd::Uninstall(sel) => {
-            let hosts = resolve(sel, out)?;
+            let hosts = resolve(sel);
             if hosts.is_empty() {
                 return Ok(2);
             }
@@ -93,7 +95,7 @@ pub fn run(cmd: &PluginCmd, out: &mut dyn Write) -> io::Result<i32> {
         }
         PluginCmd::Status(sel) => {
             let hosts = match sel {
-                Some(s) => resolve(s, out)?,
+                Some(s) => resolve(s),
                 None => NoteitHost::all(),
             };
             if hosts.is_empty() {
@@ -218,15 +220,13 @@ mod tests {
 
     #[test]
     fn unknown_host_reports_and_fails() {
+        // The "unknown host" diagnostic goes to stderr (not captured here); an
+        // unknown host must yield exit code 2 and write nothing to stdout.
         let mut out = Vec::new();
         let code = with_isolated_home("unknown", || {
             run(&PluginCmd::Install(HostSel::One("bogus".into())), &mut out).unwrap()
         });
         assert_eq!(code, 2);
-        assert!(
-            String::from_utf8(out)
-                .unwrap()
-                .contains("unknown host: bogus")
-        );
+        assert!(out.is_empty(), "no stdout on unknown host");
     }
 }

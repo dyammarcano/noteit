@@ -1,6 +1,6 @@
 //! Atomic asset-tree writer with stale-sweep.
 //!
-//! Ported from `pkg/aihost/write_tree.go` (lensr). [`write_tree_atomic`] is the
+//! Ported from an internal Go plugin-host package. [`write_tree_atomic`] is the
 //! shared writer used by hosts that need no host-specific install ritual: every
 //! file from [`TreeWriter::walk`] + [`TreeWriter::manifest_files`] is written via
 //! tmp+rename, then any pre-existing file under `sweep_dirs` not produced this

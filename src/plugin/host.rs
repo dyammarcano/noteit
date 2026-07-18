@@ -1,6 +1,6 @@
 //! The host contract a plugin target must satisfy.
 //!
-//! Ported from `pkg/aihost/host.go` (lensr). [`Host`] is the minimum surface a
+//! Ported from an internal Go plugin-host package. [`Host`] is the minimum surface a
 //! plugin host implementation exposes so a `noteit plugin install` dispatcher
 //! can drive install/uninstall uniformly. [`Installer`], [`Status`], and
 //! [`Doctor`] are optional capabilities probed for at the call site.

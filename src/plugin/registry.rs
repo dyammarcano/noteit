@@ -1,6 +1,6 @@
 //! Host factory registry.
 //!
-//! Ported from `pkg/aihost/registry.go` (lensr). Go registered hosts via
+//! Ported from an internal Go plugin-host package. Go registered hosts via
 //! package `init()` side effects into a global slice; Rust has no equivalent, so
 //! this is an explicit owned [`HostRegistry`] the caller populates.
 

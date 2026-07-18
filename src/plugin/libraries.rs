@@ -1,10 +1,10 @@
 //! Synthesized library skills that preserve command/agent discovery on hosts
 //! whose install surface is skills-only.
 //!
-//! Ported from `pkg/aihost/portable_libraries.go` (lensr) and **de-identified**:
-//! every lensr-specific literal (`lensr-command-library`, `lensr.v1.*`,
-//! "Claude-only") is replaced with a neutral, host-agnostic equivalent so this
-//! module is safe to ship in the public noteit repo.
+//! Ported from an internal Go plugin-host package and **de-identified**: every
+//! source-project-specific literal is replaced with a neutral, host-agnostic
+//! equivalent so this module is safe to ship in the public noteit repo. The
+//! guard test below enforces that no such literal survives into rendered output.
 
 use super::asset::{Asset, AssetRegistry, Kind};
 use std::fmt::Write as _;
@@ -170,18 +170,22 @@ mod tests {
         );
     }
 
-    // Public-repo guard: no lensr-specific identifier may leak into shipped output.
+    // Public-repo guard: the private source project's name (and other
+    // source-specific phrasing) must never leak into shipped, rendered output.
+    // The forbidden tokens below are the enforcement mechanism, not provenance.
     #[test]
-    fn de_identified_no_lensr_literals() {
+    fn de_identified_no_private_literals() {
+        let forbidden = ["lensr", "claude-only", "inovacc"];
         let reg = registry_with_commands();
         for s in portable_library_skills(&reg) {
             let hay = format!("{}\n{}\n{}", s.path, s.frontmatter, s.body).to_lowercase();
-            assert!(!hay.contains("lensr"), "lensr literal leaked: {}", s.path);
-            assert!(
-                !hay.contains("claude-only"),
-                "host-specific phrasing leaked: {}",
-                s.path
-            );
+            for token in forbidden {
+                assert!(
+                    !hay.contains(token),
+                    "private literal {token:?} leaked: {}",
+                    s.path
+                );
+            }
         }
     }
 }

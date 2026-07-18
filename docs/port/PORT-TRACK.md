@@ -1,4 +1,4 @@
-# PORT-TRACK — aihost core contract → noteit `plugin`
+# PORT-TRACK — plugin-host contract → noteit `plugin`
 
 | # | Module | Rust file | Ported tests | Status | Gates |
 |---|--------|-----------|--------------|--------|-------|
@@ -18,8 +18,8 @@ unterminated delimiter; `Status` writer generalized to `&mut dyn Write`; global
 registries → owned structs; `DoctorReport`/`DoctorCheck` JSON tags dropped
 (no in-scope consumer).
 
-**De-identification verified:** `de_identified_no_lensr_literals` asserts no
-`lensr` / `claude-only` substring in any rendered library skill.
+**De-identification verified:** `de_identified_no_private_literals` asserts no
+forbidden source-project token survives into any rendered library skill.
 
 ## Phase B (noteit-native, on top of the ported contract) — DONE
 
