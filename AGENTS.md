@@ -1,5 +1,5 @@
 # AGENTS.md
-<!-- rev:002 -->
+<!-- rev:003 -->
 
 Instructions for agents (and human contributors) working in this repo.
 `noteit` is a Rust CLI that captures notes bound to a git repo's identity
@@ -17,12 +17,19 @@ cargo clippy --all-targets -- -D warnings   # clippy-deny gate is active
 cargo audit                                 # dependency advisory scan
 ```
 
-The test suite currently has ~156 tests across `tests/adoption.rs`,
-`tests/cli.rs`, `tests/context.rs`, `tests/editor.rs`, `tests/main_smoke.rs`,
-`tests/plugin.rs`, `tests/property.rs`, `tests/render.rs`, `tests/repoid.rs`,
-`tests/run.rs`, and `tests/store.rs`, plus unit tests in the library
-(including `src/plugin/*`). All gates above must pass before committing;
-`[lints.clippy] all = deny` is enforced in `Cargo.toml`.
+The test suite currently has ~160 tests across `tests/adoption.rs`,
+`tests/cli.rs`, `tests/config.rs`, `tests/context.rs`, `tests/editor.rs`,
+`tests/main_smoke.rs`, `tests/plugin.rs`, `tests/property.rs`,
+`tests/render.rs`, `tests/repoid.rs`, `tests/run.rs`, and `tests/store.rs`,
+plus unit tests in the library (including `src/plugin/*`). All gates above must
+pass before committing; `[lints.clippy] all = deny` is enforced in
+`Cargo.toml`.
+
+Config is env-driven (no global flags, to keep the ambiguity rule clean):
+`NOTEIT_DB` (database path), `NOTEIT_QUIET` (suppress stderr notices),
+`NOTEIT_PLUGIN_ROOT` (plugin install root). `noteit export` dumps all notes as
+JSON. CLI parsing lives in `src/cli/parse.rs`; runtime dispatch in
+`src/cli/mod.rs`.
 
 ## Plugin surface
 

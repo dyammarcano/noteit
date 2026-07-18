@@ -17,9 +17,13 @@ Project type: Rust (Cargo, edition 2024) CLI. Assessed 2026-07-17.
 >   pushed to GitHub; `LICENSE` (BSD-3) is present.
 > - **Scope grew:** a plugin system was added (`src/plugin/*`, `noteit plugin
 >   install|list|status|uninstall`), lifting the suite from 71 → **139 tests**.
->   `cli.rs` grew 372 → 550 lines and remains the least-covered module — the one
->   still-open Testing gap. Coverage numbers below are the last one-off
->   measurement and are pending a re-run.
+>   `cli.rs` was refactored into `cli/parse.rs` + `cli/mod.rs` and gained
+>   integration + property tests; its dispatch path is now exercised end-to-end.
+>   Coverage numbers below are the last one-off measurement. A local
+>   `cargo llvm-cov` re-run is impractical (the instrumented rebuild of the
+>   bundled SQLite doesn't finish in a reasonable window), so coverage is now
+>   tracked by the **CI coverage job** (`.github/workflows/ci.yml`) rather than a
+>   local one-off.
 >
 > Re-run a full `/project:rating` audit to recompute the weighted score; it is
 > expected to have moved up from 64.8 (Beta) toward the Beta/Production boundary.
