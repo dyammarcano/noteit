@@ -1,5 +1,5 @@
 # BACKLOG
-<!-- rev:005 -->
+<!-- rev:006 -->
 
 Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
@@ -41,3 +41,15 @@ blocks the current release; each item is tracked so it isn't lost.
 - Sync (multi-machine note synchronization).
 - Encryption of the SQLite database at rest.
 - Attachments (non-text note content).
+
+## Investigated — accepted, no action
+
+- **Duplicate `hashbrown` versions (0.14.5 / 0.16.1 / 0.17.1).** All three are
+  100% transitive through `gix`'s own crate family — `hashbrown 0.14.5` via
+  `dashmap → gix-tempfile`, `0.16.1` via `clru → gix-pack`, `0.17.1` via
+  `gix-hashtable`. noteit has **zero direct pull** on any of them, and
+  `Cargo.toml` mandates `gix` default features, so this can only resolve when
+  `gix` aligns its internal dependency versions upstream. Not actionable from
+  this repo; re-check when bumping `gix`.
+- **Dependency vulnerabilities.** `cargo audit` is clean (191 deps, 0
+  advisories) and runs as a blocking CI job. No `audit.toml` ignore-list needed.

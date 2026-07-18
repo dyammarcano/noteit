@@ -51,3 +51,25 @@ jobs:
       # in audit.toml with a rationale.
       - name: cargo audit
         run: cargo audit
+
+  coverage:
+    name: coverage (informational)
+    runs-on: ubuntu-latest
+    # Non-blocking: llvm-cov does an instrumented rebuild of the bundled
+    # SQLite, which is slow; a coverage hiccup must never red the pipeline.
+    # The `test` job above is the real gate.
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: cargo llvm-cov --summary-only
+        run: cargo llvm-cov --summary-only
