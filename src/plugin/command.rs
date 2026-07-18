@@ -33,6 +33,77 @@ pub enum PluginCmd {
     Uninstall(HostSel),
 }
 
+/// Error from parsing a `plugin` subcommand's arguments. Kept in the plugin
+/// module so the CLI parser doesn't need to know plugin subcommand/flag syntax.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseError {
+    /// `install`/`uninstall` was given without `--host`.
+    NeedsHost,
+    /// Unrecognized `plugin` subcommand.
+    UnknownSub(String),
+    /// Unrecognized flag after a `plugin` subcommand.
+    UnknownFlag(String),
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::NeedsHost => f.write_str(
+                "usage: noteit plugin install|uninstall --host <claude|codex|gemini|all>",
+            ),
+            ParseError::UnknownSub(s) => write!(
+                f,
+                "unknown plugin subcommand: {s} (try: list, install, status, doctor, uninstall)"
+            ),
+            ParseError::UnknownFlag(s) => write!(f, "unknown flag: {s}"),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+/// Parses the arguments after the `plugin` verb into a [`PluginCmd`]. Owns the
+/// plugin subcommand + `--host` flag grammar (previously lived in the CLI layer).
+pub fn parse(rest: &[String]) -> Result<PluginCmd, ParseError> {
+    let (sub, flags) = match rest.split_first() {
+        Some((s, f)) => (s.as_str(), f),
+        None => ("list", &[][..]),
+    };
+    match sub {
+        "list" => Ok(PluginCmd::List),
+        "install" => Ok(PluginCmd::Install(
+            parse_host_flag(flags)?.ok_or(ParseError::NeedsHost)?,
+        )),
+        "uninstall" => Ok(PluginCmd::Uninstall(
+            parse_host_flag(flags)?.ok_or(ParseError::NeedsHost)?,
+        )),
+        "status" => Ok(PluginCmd::Status(parse_host_flag(flags)?)),
+        "doctor" => Ok(PluginCmd::Doctor(parse_host_flag(flags)?)),
+        other => Err(ParseError::UnknownSub(other.to_string())),
+    }
+}
+
+fn parse_host_flag(rest: &[String]) -> Result<Option<HostSel>, ParseError> {
+    let mut sel = None;
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "--host" => {
+                i += 1;
+                let v = rest.get(i).ok_or(ParseError::NeedsHost)?;
+                sel = Some(if v == "all" {
+                    HostSel::All
+                } else {
+                    HostSel::One(v.clone())
+                });
+            }
+            other => return Err(ParseError::UnknownFlag(other.to_string())),
+        }
+        i += 1;
+    }
+    Ok(sel)
+}
+
 fn resolve(sel: &HostSel) -> Vec<NoteitHost> {
     match sel {
         HostSel::All => NoteitHost::all(),

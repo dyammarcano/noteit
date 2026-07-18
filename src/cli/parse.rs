@@ -31,10 +31,8 @@ pub enum CliError {
     AdoptNeedsUndo,
     #[error("usage: noteit delete <id>")]
     DeleteNeedsId,
-    #[error("usage: noteit plugin install|uninstall --host <claude|codex|gemini|all>")]
-    PluginNeedsHost,
-    #[error("unknown plugin subcommand: {0} (try: list, install, status, doctor, uninstall)")]
-    PluginUnknownSub(String),
+    #[error("{0}")]
+    Plugin(#[from] crate::plugin::command::ParseError),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -113,48 +111,6 @@ fn parse_list_args(rest: &[String]) -> Result<ListArgs, CliError> {
         i += 1;
     }
     Ok(a)
-}
-
-fn parse_host_flag(rest: &[String]) -> Result<Option<crate::plugin::HostSel>, CliError> {
-    use crate::plugin::HostSel;
-    let mut sel = None;
-    let mut i = 0;
-    while i < rest.len() {
-        match rest[i].as_str() {
-            "--host" => {
-                i += 1;
-                let v = rest.get(i).ok_or(CliError::PluginNeedsHost)?;
-                sel = Some(if v == "all" {
-                    HostSel::All
-                } else {
-                    HostSel::One(v.clone())
-                });
-            }
-            other => return Err(CliError::UnknownFlag(other.to_string())),
-        }
-        i += 1;
-    }
-    Ok(sel)
-}
-
-fn parse_plugin(rest: &[String]) -> Result<crate::plugin::PluginCmd, CliError> {
-    use crate::plugin::PluginCmd;
-    let (sub, flags) = match rest.split_first() {
-        Some((s, f)) => (s.as_str(), f),
-        None => ("list", &[][..]),
-    };
-    match sub {
-        "list" => Ok(PluginCmd::List),
-        "install" => Ok(PluginCmd::Install(
-            parse_host_flag(flags)?.ok_or(CliError::PluginNeedsHost)?,
-        )),
-        "uninstall" => Ok(PluginCmd::Uninstall(
-            parse_host_flag(flags)?.ok_or(CliError::PluginNeedsHost)?,
-        )),
-        "status" => Ok(PluginCmd::Status(parse_host_flag(flags)?)),
-        "doctor" => Ok(PluginCmd::Doctor(parse_host_flag(flags)?)),
-        other => Err(CliError::PluginUnknownSub(other.to_string())),
-    }
 }
 
 pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
@@ -238,7 +194,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CliError> {
             let id = rest.first().ok_or(CliError::DeleteNeedsId)?;
             Ok(Invocation::Delete { id: id.clone() })
         }
-        "plugin" => Ok(Invocation::Plugin(parse_plugin(rest)?)),
+        "plugin" => Ok(Invocation::Plugin(crate::plugin::command::parse(rest)?)),
         "export" => Ok(Invocation::Export),
         _ => unreachable!("VERBS and match arms must stay in sync"),
     }
