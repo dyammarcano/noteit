@@ -21,13 +21,22 @@ path = "src/main.rs"
 # No clap: the ambiguity rule fights its parser -- see Global Constraints.
 [dependencies]
 gix = "0.85"
-rusqlite = { version = "0.40", features = ["bundled"] }
+# `bundled` (compile SQLite from source, no system dep) is ON by default so
+# normal builds are self-contained. It is a NAMED default feature only so a
+# coverage build can drop it (`--no-default-features`) and link the system
+# libsqlite3 -- otherwise `cargo llvm-cov` re-instruments the bundled C sources
+# and never finishes. See docs/analysis/MATURITY.md and the CI coverage job.
+rusqlite = { version = "0.40", default-features = false }
 thiserror = "2.0"
 tempfile = "3.27"
 
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
+
+[features]
+default = ["bundled"]
+bundled = ["rusqlite/bundled"]
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
