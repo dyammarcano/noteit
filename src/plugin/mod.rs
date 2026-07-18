@@ -27,7 +27,7 @@ pub use asset::{
 pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub use command::{HostSel, PluginCmd};
-pub use host::{Doctor, DoctorCheck, DoctorReport, Host, Installer, Status};
+pub use host::{Doctor, DoctorCheck, DoctorReport, Host, Installer};
 pub use hosts::NoteitHost;
 pub use libraries::{
     AGENT_LIBRARY_SKILL_PATH, COMMAND_LIBRARY_SKILL_PATH, portable_library_skills,

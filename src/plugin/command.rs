@@ -106,7 +106,7 @@ pub fn run(cmd: &PluginCmd, out: &mut dyn Write) -> io::Result<i32> {
             for h in &hosts {
                 let target = h.install_target()?;
                 let (state, detail) = if target.exists() {
-                    let count = installed_file_count(&target);
+                    let count = super::write_tree::count_files(&target);
                     ("installed", format!("{count} files"))
                 } else {
                     ("not installed", String::new())
@@ -151,25 +151,6 @@ pub fn run(cmd: &PluginCmd, out: &mut dyn Write) -> io::Result<i32> {
             Ok(if any_failed { 1 } else { 0 })
         }
     }
-}
-
-fn installed_file_count(dir: &std::path::Path) -> usize {
-    let mut n = 0;
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&d) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else {
-                n += 1;
-            }
-        }
-    }
-    n
 }
 
 #[cfg(test)]

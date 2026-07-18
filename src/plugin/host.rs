@@ -2,11 +2,11 @@
 //!
 //! Ported from an internal Go plugin-host package. [`Host`] is the minimum surface a
 //! plugin host implementation exposes so a `noteit plugin install` dispatcher
-//! can drive install/uninstall uniformly. [`Installer`], [`Status`], and
+//! can drive install/uninstall uniformly. [`Installer`] and
 //! [`Doctor`] are optional capabilities probed for at the call site.
 
 use std::collections::BTreeMap;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// The minimum surface a plugin host implementation must expose.
@@ -38,13 +38,6 @@ pub trait Installer {
     fn install(&self, target: &Path) -> io::Result<usize>;
     /// Removes plugin files at `target` and undoes patches.
     fn uninstall(&self, target: &Path) -> io::Result<()>;
-}
-
-/// Optional capability for hosts that report install health checks suitable for
-/// a `noteit plugin status` subcommand.
-pub trait Status {
-    /// Writes a human-readable status report to `w`.
-    fn print_status(&self, w: &mut dyn Write) -> io::Result<()>;
 }
 
 /// One host-side health-check result.

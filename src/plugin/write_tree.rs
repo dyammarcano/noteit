@@ -102,6 +102,14 @@ fn collect_files(dir: &Path, into: &mut Vec<PathBuf>) {
     }
 }
 
+/// Counts every file (not directory) under `dir`, recursively. The shared
+/// helper behind `plugin status` and `plugin doctor`'s file tallies.
+pub(crate) fn count_files(dir: &Path) -> usize {
+    let mut files = Vec::new();
+    collect_files(dir, &mut files);
+    files.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

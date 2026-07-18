@@ -203,26 +203,6 @@ fn check(name: &str, verdict: &str, detail: String, fix: &str) -> DoctorCheck {
     }
 }
 
-/// Recursively counts files (not directories) under `dir`.
-fn count_files_under(dir: &std::path::Path) -> usize {
-    let mut n = 0;
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&d) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else {
-                n += 1;
-            }
-        }
-    }
-    n
-}
-
 impl Doctor for NoteitHost {
     fn doctor(&self) -> DoctorReport {
         let target = match self.install_target() {
@@ -270,7 +250,7 @@ impl Doctor for NoteitHost {
                 ));
             }
 
-            let found = count_files_under(&target);
+            let found = super::write_tree::count_files(&target);
             let expected = self.asset_count() + 1; // assets + manifest
             if found >= expected {
                 checks.push(check(
