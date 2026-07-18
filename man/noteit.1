@@ -1,0 +1,102 @@
+.TH NOTEIT 1 "2026-07-18" "noteit 0.1.0" "User Commands"
+.SH NAME
+noteit \- capture notes bound to the git repository you're in
+.SH SYNOPSIS
+.B noteit
+.RI [ text ]
+.br
+.B noteit
+.I verb
+.RI [ args ]
+.SH DESCRIPTION
+.B noteit
+captures small notes that bind to the identity of the git repository you run it
+in. Notes follow a repo across clones and renames because they key off the
+repository's first commit, not its path. Outside a repo, notes bind to the
+directory path and are adopted into a repo if one appears later.
+.PP
+The first argument decides the action: an argument matching a known verb runs
+that verb; anything else is captured as note text. Use
+.B add
+to capture text that collides with a verb.
+.SH COMMANDS
+.TP
+.BI "noteit " text
+Capture a note in the current context.
+.TP
+.B noteit
+List notes for the current context.
+.TP
+.BI "add " text
+Capture text that collides with a verb.
+.TP
+.B new
+Capture a longer note in $EDITOR (or $VISUAL).
+.TP
+.BI "search " query
+Full-text search. With
+.B \-\-global
+searches every repository.
+.TP
+.B list
+List notes. Flags:
+.BR \-\-global ", " \-\-flat ", " "\-\-tag " \fIt\fR ", " \-\-all ", " "\-\-limit " \fIn\fR.
+.TP
+.BI "done " id
+Mark a note done.
+.TP
+.BI "open " id
+Reopen a note.
+.TP
+.BI "delete " id
+Permanently delete a note (context-scoped).
+.TP
+.BI "project rename " name
+Rename the current project.
+.TP
+.B adopt \-\-undo
+Reverse the most recent automatic adoption and keep it reversed.
+.TP
+.BI "plugin install \-\-host " host
+Install noteit's plugin assets into an AI host
+.RB ( claude ", " codex ", " gemini ", or " all ).
+.TP
+.B "plugin list | status | doctor | uninstall \-\-host \fIhost\fR"
+Manage plugin installs.
+.B doctor
+runs host-side health checks.
+.SH FILES
+.TP
+.I $HOME/noteit.db
+The SQLite database holding all notes (\fI%USERPROFILE%\\noteit.db\fR on Windows).
+.TP
+.I $HOME/.<host>/plugins/noteit/
+Installed plugin trees. Override the home dir with
+.BR NOTEIT_PLUGIN_ROOT .
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Not found (e.g.
+.B done
+/\c
+.B open
+/\c
+.B delete
+on an id with no matching note), or a corrupt plugin install reported by
+.BR doctor .
+.TP
+.B 2
+Usage error, or an empty/whitespace capture.
+.SH ENVIRONMENT
+.TP
+.B EDITOR ", " VISUAL
+Editor used by
+.BR "noteit new" .
+.TP
+.B NOTEIT_PLUGIN_ROOT
+Overrides the home directory used for plugin install targets.
+.SH SEE ALSO
+Project documentation and source: https://github.com/dyammarcano/noteit
