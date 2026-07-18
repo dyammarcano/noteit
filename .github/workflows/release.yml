@@ -1,0 +1,41 @@
+# Tag-triggered release: verify the tag matches Cargo.toml, build a release
+# binary, and publish a GitHub Release with generated notes + the artifact.
+# Cutting a release is `git tag vX.Y.Z && git push origin vX.Y.Z`.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build + publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Guard against a tag that disagrees with the crate version (the release
+      # consistency check the CI audit flagged as missing).
+      - name: verify tag matches Cargo.toml version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')"
+          echo "tag=$tag crate=$crate"
+          test "$tag" = "$crate" || { echo "::error::tag $tag != Cargo.toml $crate"; exit 1; }
+
+      - name: build release binary
+        run: cargo build --release --locked
+
+      - name: package artifact
+        run: tar czf "noteit-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" -C target/release noteit
+
+      - name: publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: noteit-*.tar.gz
+          generate_release_notes: true

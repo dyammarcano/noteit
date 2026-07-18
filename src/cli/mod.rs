@@ -19,10 +19,23 @@ const DEFAULT_LIMIT: usize = 50;
 /// announcements) should be printed. `NOTEIT_QUIET` set to anything other than
 /// empty or `0` suppresses them. Hard errors are never suppressed — only the
 /// advisory notices that a scripting caller may not want on stderr.
+///
+/// noteit's verbosity model is intentionally env-driven, not flag-driven: a
+/// global `-v/-q` flag would fight the first-arg ambiguity rule (see ADR-0002),
+/// so there is a single quiet/normal switch rather than log levels.
 fn notices_enabled() -> bool {
     match std::env::var_os("NOTEIT_QUIET") {
         Some(v) => v.is_empty() || v == "0",
         None => true,
+    }
+}
+
+/// The single sink for informational stderr notices — respects
+/// [`notices_enabled`] so every notice is gated in one place. Hard errors do
+/// NOT go through here; they always print.
+fn notice(args: std::fmt::Arguments<'_>) {
+    if notices_enabled() {
+        eprintln!("{args}");
     }
 }
 
@@ -158,11 +171,8 @@ pub fn run_core(
     out: &mut dyn Write,
 ) -> Result<i32, Box<dyn std::error::Error>> {
     let resolved = resolve(store, cwd)?;
-    let notices = notices_enabled();
-    if let Some(w) = &resolved.warning
-        && notices
-    {
-        eprintln!("warning: {w}");
+    if let Some(w) = &resolved.warning {
+        notice(format_args!("warning: {w}"));
     }
 
     // Adoption is automatic but ANNOUNCED -- it moves data between scopes,
@@ -171,12 +181,11 @@ pub fn run_core(
     // and semantically confusing (adopt-then-undo in one invocation).
     if !matches!(inv, Invocation::Adopt { undo: true })
         && let Some(r) = adopt_if_needed(store, &resolved)?
-        && notices
     {
-        eprintln!(
+        notice(format_args!(
             "adopted {} notes from {} paths into {}",
             r.notes_moved, r.paths_folded, r.project
-        );
+        ));
     }
     // No re-resolve needed: adopt_if_needed only folds OTHER path-contexts'
     // notes INTO this resolved context -- it never changes `resolved`'s own
