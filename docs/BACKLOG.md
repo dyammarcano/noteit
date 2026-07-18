@@ -1,5 +1,5 @@
 # BACKLOG
-<!-- rev:006 -->
+<!-- rev:007 -->
 
 Deferred work identified during implementation of `noteit`. Nothing here
 blocks the current release; each item is tracked so it isn't lost.
@@ -37,7 +37,12 @@ blocks the current release; each item is tracked so it isn't lost.
 ## Deferred by design (from the original spec's out-of-scope list)
 
 - Upward repo walk (searching parent directories for a repo root when the
-  cwd itself isn't one).
+  cwd itself isn't one). Considered during the 2026-07-18 maturation pass and
+  deliberately left out — it's a product/behavior decision, not a gap.
+- `noteit import` — the counterpart to the shipped `noteit export`. Deferred:
+  it needs a JSON parser (a new dependency or a hand-rolled one) plus a
+  merge/conflict policy for ids and contexts. Export (backup) shipped first as
+  the safe read-only subset.
 - Sync (multi-machine note synchronization).
 - Encryption of the SQLite database at rest.
 - Attachments (non-text note content).

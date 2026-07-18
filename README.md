@@ -1,5 +1,5 @@
 # noteit
-<!-- rev:005 -->
+<!-- rev:006 -->
 
 `noteit` is a command-line tool for capturing small ideas and notes that bind
 themselves to the git repository (or plain directory) you were in when you
@@ -68,6 +68,8 @@ noteit search <query>      full-text search      [--global]
 noteit list                list notes            [--global] [--flat] [--tag <t>] [--all] [--limit <n>]
 noteit done <id>           mark a note done
 noteit open <id>           reopen a note
+noteit delete <id>         delete a note permanently
+noteit export              dump all notes as JSON (backup)
 noteit project rename <n>  rename the current project
 noteit adopt --undo        reverse the most recent adoption (and keep it reversed)
 noteit plugin install --host <claude|codex|gemini|all>
@@ -182,6 +184,23 @@ The database uses WAL mode with a busy timeout, so two shells capturing notes
 at the same time is safe. Schema migrations are tracked via
 `PRAGMA user_version`. Full-text search is powered by an FTS5 external-content
 table kept in sync via triggers.
+
+## Configuration
+
+noteit is configured through environment variables (there are no global flags,
+to keep the first-arg ambiguity rule unambiguous):
+
+- **`NOTEIT_DB`** — path to the database file, overriding the default
+  `$HOME/noteit.db`. Useful for tests, scripts, or keeping separate stores.
+- **`NOTEIT_QUIET`** — set to anything other than empty or `0` to suppress
+  informational stderr notices (repo-detection warnings, adoption
+  announcements). Hard errors are never suppressed.
+- **`NOTEIT_PLUGIN_ROOT`** — overrides the home directory used for
+  `noteit plugin install` targets.
+- **`EDITOR`** / **`VISUAL`** — editor launched by `noteit new`.
+
+Back up your notes any time with `noteit export`, which writes every note (with
+its context) as JSON to stdout — pipe it to a file or `jq`.
 
 ## Plugin (use noteit from an AI host)
 
