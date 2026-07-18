@@ -43,7 +43,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-audit
+          tool: cargo-audit,cargo-deny
 
       # No unfixable advisories were found as of H-10's audit run, so this
       # step is blocking. If a future advisory has no available fix, add
@@ -51,6 +51,12 @@ jobs:
       # in audit.toml with a rationale.
       - name: cargo audit
         run: cargo audit
+
+      # Supply-chain gate: RustSec advisories + license allow-list + source
+      # trust (config in deny.toml). Duplicate versions are `warn` (the
+      # accepted transitive hashbrown dup via gix), so this stays blocking.
+      - name: cargo deny
+        run: cargo deny check
 
   coverage:
     name: coverage (informational)
