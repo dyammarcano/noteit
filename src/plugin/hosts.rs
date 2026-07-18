@@ -11,7 +11,7 @@ use std::io;
 use std::path::PathBuf;
 
 use super::asset::{AssetRegistry, TemplateData};
-use super::host::Host;
+use super::host::{Doctor, DoctorCheck, DoctorReport, Host};
 use super::libraries::portable_library_skills;
 use super::write_tree::{TreeWriter, write_tree_atomic};
 use super::{Installer, noteit};
@@ -194,6 +194,125 @@ impl Installer for NoteitHost {
     }
 }
 
+fn check(name: &str, verdict: &str, detail: String, fix: &str) -> DoctorCheck {
+    DoctorCheck {
+        name: name.to_string(),
+        verdict: verdict.to_string(),
+        detail,
+        fix: fix.to_string(),
+    }
+}
+
+/// Recursively counts files (not directories) under `dir`.
+fn count_files_under(dir: &std::path::Path) -> usize {
+    let mut n = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+impl Doctor for NoteitHost {
+    fn doctor(&self) -> DoctorReport {
+        let target = match self.install_target() {
+            Ok(t) => t,
+            Err(e) => {
+                return DoctorReport {
+                    host: self.name.clone(),
+                    target: String::new(),
+                    checks: vec![check(
+                        "install-target",
+                        "FAIL",
+                        e.to_string(),
+                        "set USERPROFILE / HOME (or NOTEIT_PLUGIN_ROOT)",
+                    )],
+                    verdict: "FAILED".to_string(),
+                };
+            }
+        };
+
+        let reinstall = format!("run: noteit plugin install --host {}", self.name);
+        let mut checks = Vec::new();
+
+        if target.exists() {
+            checks.push(check(
+                "installed",
+                "PASS",
+                "plugin tree present".to_string(),
+                "",
+            ));
+
+            let manifest = target.join(self.manifest_path());
+            if manifest.exists() {
+                checks.push(check(
+                    "manifest",
+                    "PASS",
+                    format!("{} present", self.manifest_path()),
+                    "",
+                ));
+            } else {
+                checks.push(check(
+                    "manifest",
+                    "FAIL",
+                    format!("{} missing", self.manifest_path()),
+                    &reinstall,
+                ));
+            }
+
+            let found = count_files_under(&target);
+            let expected = self.asset_count() + 1; // assets + manifest
+            if found >= expected {
+                checks.push(check(
+                    "assets",
+                    "PASS",
+                    format!("{found} files (expected >= {expected})"),
+                    "",
+                ));
+            } else {
+                checks.push(check(
+                    "assets",
+                    "WARN",
+                    format!("{found} files present, expected {expected} (partial install)"),
+                    &reinstall,
+                ));
+            }
+        } else {
+            checks.push(check(
+                "installed",
+                "WARN",
+                "not installed".to_string(),
+                &reinstall,
+            ));
+        }
+
+        let verdict = if checks.iter().any(|c| c.verdict == "FAIL") {
+            "FAILED"
+        } else if checks.iter().any(|c| c.verdict == "WARN") {
+            "DEGRADED"
+        } else {
+            "OK"
+        };
+
+        DoctorReport {
+            host: self.name.clone(),
+            target: target.display().to_string(),
+            checks,
+            verdict: verdict.to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,6 +367,52 @@ mod tests {
         assert!(!target.exists());
         // Idempotent.
         h.uninstall(&target).unwrap();
+
+        unsafe {
+            std::env::remove_var("NOTEIT_PLUGIN_ROOT");
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn doctor_reports_degraded_before_ok_after_and_failed_on_corruption() {
+        let _guard = crate::plugin::ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let tmp = std::env::temp_dir().join("noteit-plugin-doctor-test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        // SAFETY: ENV_LOCK serializes all NOTEIT_PLUGIN_ROOT mutators.
+        unsafe {
+            std::env::set_var("NOTEIT_PLUGIN_ROOT", &tmp);
+        }
+
+        let h = NoteitHost::claude();
+        let target = h.install_target().unwrap();
+
+        // Not installed -> DEGRADED with a WARN "installed" check.
+        let r = h.doctor();
+        assert_eq!(r.verdict, "DEGRADED");
+        assert!(
+            r.checks
+                .iter()
+                .any(|c| c.name == "installed" && c.verdict == "WARN")
+        );
+
+        // Installed -> OK, all checks pass.
+        h.install(&target).unwrap();
+        let r = h.doctor();
+        assert_eq!(r.verdict, "OK", "checks: {:?}", r.checks);
+        assert!(r.checks.iter().all(|c| c.verdict == "PASS"));
+
+        // Corrupt it: delete the manifest -> FAILED.
+        std::fs::remove_file(target.join(h.manifest_path())).unwrap();
+        let r = h.doctor();
+        assert_eq!(r.verdict, "FAILED");
+        assert!(
+            r.checks
+                .iter()
+                .any(|c| c.name == "manifest" && c.verdict == "FAIL")
+        );
 
         unsafe {
             std::env::remove_var("NOTEIT_PLUGIN_ROOT");

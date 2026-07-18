@@ -32,7 +32,7 @@ pub enum CliError {
     DeleteNeedsId,
     #[error("usage: noteit plugin install|uninstall --host <claude|codex|gemini|all>")]
     PluginNeedsHost,
-    #[error("unknown plugin subcommand: {0} (try: list, install, status, uninstall)")]
+    #[error("unknown plugin subcommand: {0} (try: list, install, status, doctor, uninstall)")]
     PluginUnknownSub(String),
 }
 
@@ -76,7 +76,7 @@ USAGE:
     noteit project rename <n>  rename the current project
     noteit plugin install --host <claude|codex|gemini|all>
                                install noteit's assets into an AI host
-    noteit plugin list | status | uninstall --host <h>
+    noteit plugin list | status | doctor | uninstall --host <h>
     noteit --help | --version
 
 NOTES:
@@ -149,6 +149,7 @@ fn parse_plugin(rest: &[String]) -> Result<crate::plugin::PluginCmd, CliError> {
             parse_host_flag(flags)?.ok_or(CliError::PluginNeedsHost)?,
         )),
         "status" => Ok(PluginCmd::Status(parse_host_flag(flags)?)),
+        "doctor" => Ok(PluginCmd::Doctor(parse_host_flag(flags)?)),
         other => Err(CliError::PluginUnknownSub(other.to_string())),
     }
 }

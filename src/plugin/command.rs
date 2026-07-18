@@ -6,7 +6,7 @@
 
 use std::io::{self, Write};
 
-use super::host::{Host, Installer};
+use super::host::{Doctor, Host, Installer};
 use super::hosts::NoteitHost;
 
 /// Which host(s) a plugin operation targets.
@@ -27,6 +27,8 @@ pub enum PluginCmd {
     Install(HostSel),
     /// Report install status for the selected host(s), or all.
     Status(Option<HostSel>),
+    /// Run host-side health checks for the selected host(s), or all.
+    Doctor(Option<HostSel>),
     /// Remove noteit's assets from the selected host(s).
     Uninstall(HostSel),
 }
@@ -117,6 +119,36 @@ pub fn run(cmd: &PluginCmd, out: &mut dyn Write) -> io::Result<i32> {
                 )?;
             }
             Ok(0)
+        }
+        PluginCmd::Doctor(sel) => {
+            let hosts = match sel {
+                Some(s) => resolve(s),
+                None => NoteitHost::all(),
+            };
+            if hosts.is_empty() {
+                return Ok(2);
+            }
+            let mut any_failed = false;
+            for h in &hosts {
+                let report = h.doctor();
+                if report.verdict == "FAILED" {
+                    any_failed = true;
+                }
+                writeln!(
+                    out,
+                    "{} [{}] {}",
+                    report.host, report.verdict, report.target
+                )?;
+                for c in &report.checks {
+                    writeln!(out, "  {:<5} {} — {}", c.verdict, c.name, c.detail)?;
+                    if !c.fix.is_empty() {
+                        writeln!(out, "        fix: {}", c.fix)?;
+                    }
+                }
+            }
+            // A corrupt install (FAILED) is an error exit; not-installed
+            // (DEGRADED) is a normal diagnostic outcome.
+            Ok(if any_failed { 1 } else { 0 })
         }
     }
 }

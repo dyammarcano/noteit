@@ -1,5 +1,5 @@
 # noteit
-<!-- rev:004 -->
+<!-- rev:005 -->
 
 `noteit` is a command-line tool for capturing small ideas and notes that bind
 themselves to the git repository (or plain directory) you were in when you
@@ -72,7 +72,7 @@ noteit project rename <n>  rename the current project
 noteit adopt --undo        reverse the most recent adoption (and keep it reversed)
 noteit plugin install --host <claude|codex|gemini|all>
                            install noteit's assets into an AI host
-noteit plugin list | status | uninstall --host <h>
+noteit plugin list | status | doctor | uninstall --host <h>
 noteit --help | --version
 ```
 
@@ -193,6 +193,7 @@ noteit plugin list                       # show hosts + install targets
 noteit plugin install --host claude      # install into ~/.claude/plugins/noteit
 noteit plugin install --host all         # claude + codex + gemini
 noteit plugin status                     # what's installed where
+noteit plugin doctor --host claude       # health-check an install
 noteit plugin uninstall --host claude
 ```
 

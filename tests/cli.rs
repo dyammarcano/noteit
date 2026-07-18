@@ -214,6 +214,18 @@ fn plugin_unknown_subcommand_is_an_error() {
 }
 
 #[test]
+fn plugin_doctor_parses_with_optional_host() {
+    match parse(&args(&["plugin", "doctor"])).unwrap() {
+        Invocation::Plugin(PluginCmd::Doctor(None)) => {}
+        other => panic!("got {other:?}"),
+    }
+    match parse(&args(&["plugin", "doctor", "--host", "gemini"])).unwrap() {
+        Invocation::Plugin(PluginCmd::Doctor(Some(HostSel::One(h)))) => assert_eq!(h, "gemini"),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
 fn version_flag_is_not_captured_as_a_note() {
     assert!(matches!(
         parse(&args(&["--version"])).unwrap(),
