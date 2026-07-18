@@ -29,5 +29,5 @@ All source-project-specific identifiers are **de-identified**; a guard test
   unterminated delimiter) — documented in `docs/port/PORT-PLAN.md`.
 - The `Doctor`/`Status` traits are part of the contract; `Doctor` is now used by
   `noteit plugin doctor`, `Status` remains available for future use.
-- Provenance is described generically; the private source project is never named
-  (see the `lensr-is-private-never-leak` guardrail).
+- Provenance is described generically; the private source project is never
+  named anywhere in this public repository.
