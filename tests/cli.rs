@@ -1,4 +1,5 @@
 use noteit::cli::{Invocation, VERBS, parse};
+use noteit::plugin::{HostSel, PluginCmd};
 use noteit::store::notes::Status;
 
 fn args(v: &[&str]) -> Vec<String> {
@@ -156,6 +157,60 @@ fn delete_parses() {
 #[test]
 fn delete_without_id_is_an_error() {
     assert!(parse(&args(&["delete"])).is_err());
+}
+
+#[test]
+fn plugin_is_a_verb_not_captured_as_a_note() {
+    // Regression guard: "plugin" must be in VERBS so `noteit plugin ...` is
+    // never swallowed as note text under the ambiguity rule.
+    assert!(VERBS.contains(&"plugin"));
+}
+
+#[test]
+fn bare_plugin_defaults_to_list() {
+    match parse(&args(&["plugin"])).unwrap() {
+        Invocation::Plugin(PluginCmd::List) => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn plugin_install_requires_a_host() {
+    // No --host is a usage error, not a silent all-hosts install.
+    assert!(parse(&args(&["plugin", "install"])).is_err());
+}
+
+#[test]
+fn plugin_install_named_host_parses() {
+    match parse(&args(&["plugin", "install", "--host", "claude"])).unwrap() {
+        Invocation::Plugin(PluginCmd::Install(HostSel::One(h))) => assert_eq!(h, "claude"),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn plugin_install_all_parses() {
+    match parse(&args(&["plugin", "install", "--host", "all"])).unwrap() {
+        Invocation::Plugin(PluginCmd::Install(HostSel::All)) => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn plugin_status_host_is_optional() {
+    match parse(&args(&["plugin", "status"])).unwrap() {
+        Invocation::Plugin(PluginCmd::Status(None)) => {}
+        other => panic!("got {other:?}"),
+    }
+    match parse(&args(&["plugin", "status", "--host", "codex"])).unwrap() {
+        Invocation::Plugin(PluginCmd::Status(Some(HostSel::One(h)))) => assert_eq!(h, "codex"),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn plugin_unknown_subcommand_is_an_error() {
+    assert!(parse(&args(&["plugin", "frobnicate"])).is_err());
 }
 
 #[test]
