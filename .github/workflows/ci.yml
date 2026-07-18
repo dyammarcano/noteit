@@ -1,5 +1,5 @@
-# NOTE: this repo currently has no git remote configured (local-only
-# worktree). This workflow will activate once the repo is pushed to GitHub.
+# CI for github.com/dyammarcano/noteit: fmt + clippy (-D warnings) + tests on
+# every push/PR to main/master, plus a cargo-audit dependency scan.
 name: CI
 
 on:

@@ -2,6 +2,28 @@
 
 Project type: Rust (Cargo, edition 2024) CLI. Assessed 2026-07-17.
 
+> **Update — 2026-07-17 (post-hardening + plugin).** Most of the original
+> Phase 1/2 route below has since landed; the scorecard rows are annotated
+> inline with **[UPDATE]** where reality has moved. Summary of what changed:
+> - **CI/CD (was F → now ~C):** `.github/workflows/ci.yml` exists and runs
+>   fmt + `clippy --all-targets -D warnings` + `cargo test` + `cargo audit` on
+>   push/PR. (Hosted-runner billing is an account-side gap, not a repo gap.)
+> - **Code Quality (was C → now ~B):** the 2 clippy findings are fixed and a
+>   `[lints.clippy] all = deny` gate is active in `Cargo.toml`; `cargo clippy
+>   --all-targets -- -D warnings` is clean.
+> - **Security (C):** `cargo audit` is now available (0.22.2) and wired into CI;
+>   a local run scans 191 deps with no advisories.
+> - **Stability (was C → now ~C+):** a git remote is configured and `master` is
+>   pushed to GitHub; `LICENSE` (BSD-3) is present.
+> - **Scope grew:** a plugin system was added (`src/plugin/*`, `noteit plugin
+>   install|list|status|uninstall`), lifting the suite from 71 → **139 tests**.
+>   `cli.rs` grew 372 → 550 lines and remains the least-covered module — the one
+>   still-open Testing gap. Coverage numbers below are the last one-off
+>   measurement and are pending a re-run.
+>
+> Re-run a full `/project:rating` audit to recompute the weighted score; it is
+> expected to have moved up from 64.8 (Beta) toward the Beta/Production boundary.
+
 **Overall stage: 2 — Beta** (weighted score ≈ 64.8 / 100, band 50–67)
 **Confidence: Medium** — most signals were directly measured (test run, clippy, `cargo llvm-cov`, `cargo tree --duplicates`, greps, git log); a few (ops readiness, stability trend) are qualitative/estimated given the project's small size and single-contributor local history (no remote, no CI runs to sample).
 
