@@ -42,7 +42,11 @@ fn gen_string(rng: &mut Lcg) -> String {
     for _ in 0..n {
         parts.push((*rng.pick(FRAGS)).to_string());
     }
-    let sep = if rng.next_u64().is_multiple_of(2) { " " } else { "" };
+    let sep = if rng.next_u64().is_multiple_of(2) {
+        " "
+    } else {
+        ""
+    };
     parts.join(sep)
 }
 
